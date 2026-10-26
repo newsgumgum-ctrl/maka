@@ -1,0 +1,1276 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Baustela 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 3D gradilište preko celog ekrana kao radna površina; plutajuća traka gore, alatna šina levo, stakleni panel desno. Na telefonu: model gore, panel ispod. */
+:root{
+  --bg:#E4E9EC;
+  --glass:rgba(250,251,252,.82);
+  --glass-strong:rgba(255,255,255,.94);
+  --surface:#FFFFFF;
+  --surface-2:#F1F4F6;
+  --ink:#10171C;
+  --ink-2:#56626B;
+  --ink-3:#8A959D;
+  --line:rgba(16,23,28,.10);
+  --line-2:rgba(16,23,28,.18);
+  --accent:#F25C05;
+  --accent-ink:#FFFFFF;
+  --accent-soft:rgba(242,92,5,.12);
+  --ok:#2B8A3E; --ok-soft:rgba(43,138,62,.12);
+  --warn:#B7791F; --warn-soft:rgba(240,159,0,.16);
+  --bad:#D9302C; --bad-soft:rgba(217,48,44,.12);
+  --info:#1C6FD1; --info-soft:rgba(28,111,209,.12);
+  --shadow:0 10px 30px -8px rgba(16,23,28,.22), 0 2px 6px rgba(16,23,28,.08);
+  --f-display:"Sora","Manrope",system-ui,sans-serif;
+  --f-body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:14px; --r-sm:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1215; --glass:rgba(22,28,33,.80); --glass-strong:rgba(26,33,38,.95); --surface:#1A2126; --surface-2:#222B31;
+    --ink:#EAF0F3; --ink-2:#A7B3BB; --ink-3:#717E87; --line:rgba(234,240,243,.09); --line-2:rgba(234,240,243,.18);
+    --accent:#FF7A2E; --accent-ink:#1B0D04; --accent-soft:rgba(255,122,46,.16);
+    --ok:#6BD48A; --ok-soft:rgba(107,212,138,.14); --warn:#F5C451; --warn-soft:rgba(245,196,81,.15);
+    --bad:#FF7B76; --bad-soft:rgba(255,123,118,.15); --info:#6FB4FF; --info-soft:rgba(111,180,255,.15);
+    --shadow:0 12px 34px -8px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.35);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1215; --glass:rgba(22,28,33,.80); --glass-strong:rgba(26,33,38,.95); --surface:#1A2126; --surface-2:#222B31;
+  --ink:#EAF0F3; --ink-2:#A7B3BB; --ink-3:#717E87; --line:rgba(234,240,243,.09); --line-2:rgba(234,240,243,.18);
+  --accent:#FF7A2E; --accent-ink:#1B0D04; --accent-soft:rgba(255,122,46,.16);
+  --ok:#6BD48A; --ok-soft:rgba(107,212,138,.14); --warn:#F5C451; --warn-soft:rgba(245,196,81,.15);
+  --bad:#FF7B76; --bad-soft:rgba(255,123,118,.15); --info:#6FB4FF; --info-soft:rgba(111,180,255,.15);
+  --shadow:0 12px 34px -8px rgba(0,0,0,.6), 0 2px 6px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.app{position:relative;height:100%;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column}
+.glass{background:var(--glass);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border:1px solid var(--line);box-shadow:var(--shadow)}
+
+/* viewport */
+.viewport{position:relative;flex:1;min-height:0;border-radius:20px;overflow:hidden;border:1px solid var(--line)}
+.viewport canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+.viewport[data-mode="pregled"] canvas{cursor:zoom-in}
+.viewport[data-mode="lasso"] canvas,.viewport[data-mode="krug"] canvas{cursor:cell}
+.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.viewport.drawing .labels *{pointer-events:none!important}
+
+/* gornja traka */
+.topbar{position:absolute;z-index:5;top:22px;left:calc(max(16px,env(safe-area-inset-left,0px)) + 12px);right:calc(max(16px,env(safe-area-inset-right,0px)) + 12px);display:flex;align-items:center;gap:10px;pointer-events:none;flex-wrap:wrap}
+.topbar > *{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px}
+.logo{width:32px;height:32px;border-radius:50%;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink)}
+.logo svg{width:18px;height:18px;stroke-width:2.2}
+.brand .nm{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand .nm b{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:.01em}
+.brand .nm input{border:0;background:transparent;font-size:12px;color:var(--ink-2);padding:0;width:210px;max-width:44vw;border-radius:4px}
+.brand .nm input:focus{outline:1px solid var(--accent);outline-offset:2px;color:var(--ink)}
+.datenav{display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px}
+.datenav button{border:0;background:transparent;height:30px;min-width:30px;padding:0 10px;border-radius:999px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.datenav button:hover{background:var(--surface-2)}
+.datenav .dn{font-family:var(--f-display);font-weight:600;font-size:13px;padding:0 6px;min-width:84px;text-align:center}
+.datenav input{border:0;background:transparent;font-family:var(--f-mono);font-size:12px;color:var(--ink-2);padding:0 4px;height:30px}
+.spacer{flex:1}
+.sync{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);padding:8px 12px;border-radius:999px}
+.sync::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.sync.on::before{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.pill-btn{border:0;height:38px;padding:0 14px;border-radius:999px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+
+/* alatna šina */
+.rail{position:absolute;z-index:4;left:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
+.rail .grp{display:flex;flex-direction:column;gap:2px;padding:5px;border-radius:16px}
+.tool{position:relative;width:40px;height:40px;border:0;border-radius:11px;background:transparent;display:grid;place-items:center;color:var(--ink-2);font-family:var(--f-display);font-weight:600;font-size:12px}
+.tool:hover{background:var(--surface-2);color:var(--ink)}
+.tool[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.tool.acc[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tool[data-tip]:hover::after,.tool[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);background:var(--ink);color:var(--surface);font-family:var(--f-body);font-weight:600;font-size:12px;padding:5px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:9}
+.tool kbd{position:absolute;right:3px;bottom:2px;font-family:var(--f-mono);font-size:8px;opacity:.55}
+.rail .cap{font-family:var(--f-mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-top:3px}
+
+/* status i legenda */
+.status{position:absolute;z-index:3;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;font-size:12.5px;max-width:calc(100% - 24px);white-space:nowrap}
+.status .k{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:500}
+.status span:last-child{overflow:hidden;text-overflow:ellipsis}
+.legend{position:absolute;z-index:3;left:66px;bottom:14px;display:flex;gap:6px;flex-wrap:wrap;max-width:36%}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px 4px 5px;font-size:12px;font-weight:600;background:var(--surface);border:1px solid var(--line)}
+.av{width:20px;height:20px;border-radius:50%;background:var(--c);color:#fff;display:grid;place-items:center;font-size:9px;font-weight:700;font-family:var(--f-display);flex:none;letter-spacing:-.02em}
+
+/* 3D natpisi */
+.lbl{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;border:0;padding:3px 10px 3px 3px;border-radius:999px;background:var(--glass-strong);color:var(--ink);box-shadow:var(--shadow);display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;white-space:nowrap;max-width:210px}
+.lbl .t{overflow:hidden;text-overflow:ellipsis;display:flex;flex-direction:column;line-height:1.15;text-align:left}
+.lbl .t small{font-weight:500;color:var(--ink-2);font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+.lbl.blok{box-shadow:0 0 0 2px var(--bad),var(--shadow)}
+.lbl.done{opacity:.6}
+.lbl::after{content:"";position:absolute;left:50%;bottom:-5px;width:8px;height:8px;background:var(--glass-strong);transform:translateX(-50%) rotate(45deg);border-radius:1px}
+.mlbl{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;border:0;padding:5px 11px;border-radius:8px;background:var(--mc);color:#fff;font-size:12px;font-weight:700;box-shadow:0 6px 18px -4px var(--mc);display:flex;align-items:center;gap:6px;white-space:nowrap;max-width:240px}
+.mlbl span{overflow:hidden;text-overflow:ellipsis}
+.mlbl.done{opacity:.55;text-decoration:line-through}
+
+/* panel */
+.panel{position:absolute;z-index:5;top:80px;right:calc(max(16px,env(safe-area-inset-right,0px)) + 12px);bottom:22px;width:410px;border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;transition:transform .25s ease,opacity .25s ease}
+.app.collapsed .panel{transform:translateX(calc(100% + 30px));opacity:0;pointer-events:none}
+.tabs{display:flex;gap:2px;padding:6px;margin:8px 8px 0;border-radius:12px;background:var(--surface-2);flex:none;overflow-x:auto}
+.tabs button{flex:1 0 auto;border:0;background:transparent;padding:7px 9px;border-radius:8px;font-weight:700;font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;justify-content:center;gap:6px}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.badge{font-family:var(--f-mono);font-size:10px;background:var(--bad);color:#fff;border-radius:999px;padding:0 6px;line-height:17px}
+.pane{flex:1;overflow:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:14px;min-height:0}
+h2{font-family:var(--f-display);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+h3{margin:0;font-family:var(--f-display);font-size:19px;font-weight:600;text-wrap:balance;letter-spacing:-.01em}
+p{margin:0}
+.muted{color:var(--ink-2)} .small{font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.kpi .v{font-family:var(--f-display);font-size:24px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi .v small{font-size:13px;color:var(--ink-3);font-weight:500}
+.kpi .l{font-size:11.5px;color:var(--ink-2)}
+.bar{height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alert{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px;background:var(--warn-soft)}
+.alert .d{flex:none;width:7px;height:7px;border-radius:50%;margin-top:6px;background:var(--warn)}
+.alert.bad{background:var(--bad-soft)}.alert.bad .d{background:var(--bad)}
+.alert.info{background:var(--info-soft)}.alert.info .d{background:var(--info)}
+.alert.okk{background:var(--ok-soft)}.alert.okk .d{background:var(--ok)}
+.zone{display:flex;flex-direction:column;gap:5px}
+.zh{font-size:11px;font-weight:700;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+.zh .hgt{color:var(--warn);font-weight:600}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.row:hover{border-color:var(--line-2)}
+.row .av{width:28px;height:28px;font-size:10.5px}
+.who{font-weight:700;font-size:13px}
+.what{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acts{display:flex;gap:4px;align-items:center}
+.st{border:0;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.st.plan{background:var(--info-soft);color:var(--info)}
+.st.rad{background:var(--warn-soft);color:var(--warn)}
+.st.gotovo{background:var(--ok-soft);color:var(--ok)}
+.st.blok{background:var(--bad-soft);color:var(--bad)}
+.ib{border:0;background:transparent;border-radius:8px;width:28px;height:28px;display:inline-grid;place-items:center;color:var(--ink-3)}
+.ib:hover{background:var(--surface-2);color:var(--ink)}
+.ib svg{width:16px;height:16px}
+.btn{border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:8px 13px;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.danger.arm{background:var(--bad);color:#fff}
+.btns{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.empty{border:1.5px dashed var(--line-2);border-radius:var(--r-sm);padding:18px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center;color:var(--ink-2)}
+.mk{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 9px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line)}
+.mk .sw{width:28px;height:28px;border-radius:8px;background:var(--mc);display:grid;place-items:center;color:#fff}
+.mk .sw svg{width:15px;height:15px}
+.mk.done{opacity:.6}
+
+.wk{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+.wk .l1{display:flex;gap:8px;align-items:center}
+.wk .l1 .av{width:34px;height:34px;font-size:12px;border:0;cursor:pointer}
+.wk .l1 input.nm{flex:1;min-width:0;font-family:var(--f-display);font-size:16px;font-weight:600;border:1px solid transparent;background:transparent;border-radius:8px;padding:3px 6px}
+.wk .l1 input.nm:hover{border-color:var(--line-2)}
+.wk .l1 input.nm:focus{border-color:var(--accent);background:var(--surface-2)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label,.fld .fl{font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.fld input,.fld select,.fld textarea{border:1px solid var(--line-2);background:var(--surface);border-radius:9px;padding:7px 9px;min-width:0;width:100%}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+.fld textarea{resize:vertical;min-height:64px}
+.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;background:var(--surface-2);color:var(--ink-2)}
+.tag.bad{background:var(--bad-soft);color:var(--bad)} .tag.warn{background:var(--warn-soft);color:var(--warn)} .tag.ok{background:var(--ok-soft);color:var(--ok)}
+.att{display:grid;grid-template-columns:minmax(0,1fr) auto 64px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.att .nm{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;min-width:0}
+.att .nm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att input{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:5px 7px;width:100%;font-family:var(--f-mono);font-size:12px}
+.seg{display:flex;background:var(--surface-2);border-radius:9px;padding:2px;gap:2px}
+.seg button{border:0;background:transparent;padding:4px 8px;font-size:11px;font-weight:700;border-radius:7px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-family:var(--f-mono);font-weight:500;font-size:10px;text-transform:uppercase;color:var(--ink-3)}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:700;background:var(--surface-2);border-bottom:0}
+pre.report{font-family:var(--f-mono);font-size:11.5px;white-space:pre-wrap;background:var(--surface);padding:14px;border-radius:var(--r-sm);margin:0;line-height:1.55;border:1px solid var(--line)}
+.research{display:flex;flex-direction:column;gap:12px}
+.fact{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:start;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sm);font-size:13px}
+.fact .num{font-family:var(--f-display);font-size:24px;font-weight:700;color:var(--accent);line-height:1;letter-spacing:-.02em}
+.gap{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--surface);border-radius:0 var(--r-sm) var(--r-sm) 0}
+.gap b{font-size:13px}
+.gap .fix{font-size:12px;color:var(--ok);font-weight:600}
+.research ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.research a{color:var(--info)}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(8,12,14,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:grid;place-items:center;z-index:50;padding:16px}
+.sheet{background:var(--glass-strong);border-radius:18px;border:1px solid var(--line);width:min(500px,100%);max-height:calc(100% - 20px);overflow:auto;padding:18px;display:flex;flex-direction:column;gap:13px;box-shadow:var(--shadow);animation:pop .18s ease-out}
+@keyframes pop{from{transform:translateY(8px) scale(.98)}to{transform:none}}
+.zhead{display:flex;flex-direction:column;gap:4px}
+.zhead .k{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+.picks{display:flex;flex-wrap:wrap;gap:6px}
+.pick{display:flex;align-items:center;gap:7px;border:1px solid var(--line-2);border-radius:999px;padding:3px 11px 3px 3px;font-size:12px;font-weight:700;background:var(--surface)}
+.pick[aria-pressed="true"]{border-color:var(--c);box-shadow:0 0 0 2px var(--c) inset;background:color-mix(in srgb,var(--c) 12%,var(--surface))}
+.pick .busy{font-weight:500;color:var(--ink-3);font-size:11px}
+.types{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:6px}
+.type{border:1px solid var(--line-2);background:var(--surface);border-radius:10px;padding:8px;display:flex;flex-direction:column;align-items:flex-start;gap:5px;font-size:12px;font-weight:700}
+.type i{width:14px;height:14px;border-radius:4px;background:var(--mc)}
+.type[aria-pressed="true"]{border-color:var(--mc);box-shadow:0 0 0 2px var(--mc) inset}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;z-index:60;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.local{font-size:12px;background:var(--warn-soft);border-radius:var(--r-sm);padding:8px 11px}
+
+@media (max-width:900px){
+  .app{height:auto;min-height:100%;gap:10px}
+  .topbar{position:static;order:0}
+  .viewport{flex:none;height:64vh;min-height:360px;order:1}
+  .panel{position:static;width:auto;order:2;min-height:50vh}
+  .app.collapsed .panel{transform:none;opacity:1;pointer-events:auto}
+  #togglePanel{display:none}
+  .legend{display:none}
+  .pane{overflow:visible}
+  .rail{top:auto;bottom:56px;transform:none}
+  .rail .views{display:none}
+  .tool[data-tip]:hover::after{display:none}
+}
+@media (min-width:901px){ .app:not(.collapsed) .status{left:calc(50% - 205px)} }
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand glass">
+      <span class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg></span>
+      <span class="nm"><b>Baustela 3D</b><input id="projName" aria-label="Naziv gradilišta" value="Moje gradilište"></span>
+    </div>
+    <div class="datenav glass" role="group" aria-label="Izbor dana">
+      <button id="dPrev" aria-label="Prethodni dan"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <span class="dn" id="dName">Danas</span>
+      <input type="date" id="dDate" aria-label="Datum">
+      <button id="dNext" aria-label="Sledeći dan"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button id="dToday">Danas</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="sync glass" id="sync">Povezivanje…</span>
+    <button class="pill-btn glass" id="togglePanel" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M14 4v16"/></svg>Panel</button>
+  </header>
+
+  <section class="viewport" id="stage" data-mode="dodeli" aria-label="3D model gradilišta">
+    <div class="labels" id="labels"></div>
+    <div class="rail">
+      <div class="grp glass" role="group" aria-label="Alati">
+        <button class="tool acc" data-mode="dodeli" data-tip="Dodeli posao · klik na model" aria-label="Dodeli posao"><svg class="i" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg><kbd>V</kbd></button>
+        <button class="tool acc" data-mode="lasso" data-tip="Zaokruži rukom · povuci po modelu" aria-label="Zaokruži rukom"><svg class="i" viewBox="0 0 24 24"><path d="M7 17c-3-1.5-4-4-3-6.5C5.5 6 12 4 17 6s4.5 7 0 9.5c-3 1.6-7 1.4-9.5.3"/><path d="M7.5 15.8c-.6 1.6-.3 3.5 1.5 4.7"/></svg><kbd>L</kbd></button>
+        <button class="tool acc" data-mode="krug" data-tip="Nacrtaj krug · povuci od centra" aria-label="Nacrtaj krug"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="3 2.6"/><circle cx="12" cy="12" r="1.3"/></svg><kbd>C</kbd></button>
+        <button class="tool acc" data-mode="pregled" data-tip="Pregled · klik približava" aria-label="Pregled"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2M11 8.5v5M8.5 11h5"/></svg><kbd>H</kbd></button>
+      </div>
+      <div class="grp glass" role="group" aria-label="Zum">
+        <button class="tool" id="zIn" data-tip="Približi (+)" aria-label="Približi"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="tool" id="zOut" data-tip="Udalji (−)" aria-label="Udalji"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        <button class="tool" id="zFit" data-tip="Ceo objekat (0)" aria-label="Ceo objekat"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+      <div class="grp glass views" role="group" aria-label="Pogledi">
+        <button class="tool" id="camIso" data-tip="3D pogled" aria-label="3D pogled"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></button>
+        <button class="tool" id="camTop" data-tip="Odozgo" aria-label="Pogled odozgo"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></svg></button>
+        <button class="tool" id="camFront" data-tip="Fasada" aria-label="Pogled na fasadu"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg></button>
+      </div>
+      <div class="grp glass" role="group" aria-label="Spratovi" id="floorGrp"></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="status glass" id="status"><span class="k" id="stK">Dodeli</span><span id="stT">Klikni bilo gde na modelu da dodeliš posao</span></div>
+  </section>
+
+  <aside class="panel glass" id="panel">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="dan" aria-selected="true">Dan <span class="badge" id="alertBadge" hidden>0</span></button>
+      <button role="tab" data-tab="radnici">Radnici</button>
+      <button role="tab" data-tab="prisustvo">Prisustvo</button>
+      <button role="tab" data-tab="dnevnik">Dnevnik</button>
+      <button role="tab" data-tab="analiza">Analiza</button>
+    </nav>
+    <div class="pane" id="pane"></div>
+  </aside>
+</div>
+<div id="modalRoot"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+"use strict";
+/* ---------- konstante ---------- */
+const H = 3.2, FLOORS = 4;
+const TRADES = ["Zidanje","Armiranje","Oplata","Betoniranje","Elektroinstalacije","Vodovod i kanalizacija","Fasada","Montaža skele","Krovni radovi","Izolacija","Malterisanje","Iskop i zemljani radovi","Transport materijala","Čišćenje","Ostalo"];
+const STATUS = {plan:"Planirano", rad:"U toku", gotovo:"Završeno", blok:"Zastoj"};
+const STATUS_ORDER = ["plan","rad","gotovo","blok"];
+const BLOCKS = ["Čeka materijal","Čeka mehanizaciju","Vremenski uslovi","Nejasan crtež / projekat","Čeka drugu ekipu","Kvar alata","Nadzor nije odobrio","Ostalo"];
+const ATT = {p:"Prisutan", o:"Odsutan", b:"Bolovanje", g:"Godišnji"};
+const COLORS = ["#E8590C","#1971C2","#2F9E44","#AE3EC9","#F08C00","#0C8599","#C2255C","#5C940D","#6741D9","#868E96","#D6336C","#1098AD"];
+const DAYS = ["Nedelja","Ponedeljak","Utorak","Sreda","Četvrtak","Petak","Subota"];
+const WEATHER = ["Sunčano","Oblačno","Kiša","Jak vetar","Sneg","Magla","Mraz"];
+const MTYPES = {
+  opasnost:{l:"Opasnost", c:"#E03131"},
+  paznja:{l:"Pažnja", c:"#F08C00"},
+  zadatak:{l:"Zadatak", c:"#1C7ED6"},
+  kvalitet:{l:"Kontrola kvaliteta", c:"#9C36B5"},
+  info:{l:"Informacija", c:"#0CA678"}
+};
+const ICON = {
+  edit:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  focus:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
+  mark:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke-dasharray="3 2.6"/></svg>',
+  pin:'<svg class="i" viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/></svg>',
+  x:'<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  copy:'<svg class="i" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>'
+};
+
+/* ---------- pomoćne ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const isoLocal = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parseD = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const addDays = (s,n) => { const d = parseD(s); d.setDate(d.getDate()+n); return isoLocal(d); };
+const diffDays = (a,b) => Math.round((parseD(a)-parseD(b))/86400000);
+const fmtD = s => { if(!s) return "—"; const d = parseD(s); return pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+"."; };
+const rsd = n => Math.round(n).toLocaleString("sr-RS")+" RSD";
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const clone = o => JSON.parse(JSON.stringify(o || {}));
+const initials = n => { const s = String(n || "?").trim(); const m = /(\d+)\s*$/.exec(s); if(/^RADNIK/i.test(s) && m) return "R" + m[1]; return s.split(/\s+/).slice(0,2).map(x => x[0] || "").join("").toUpperCase(); };
+const TODAY = isoLocal(new Date());
+const floorName = f => f===0 ? "Prizemlje" : f===3 ? "3. sprat (u izgradnji)" : f+". sprat";
+
+function toast(msg){ const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(()=>t.remove(), 2600); }
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); toast("Kopirano"); }
+  catch(e){ const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); toast("Kopirano"); }catch(_){ toast("Označi tekst i kopiraj ručno"); } ta.remove(); }
+}
+
+/* ---------- skladište ---------- */
+const S = { workers:new Map(), assignments:new Map(), days:new Map(), meta:new Map(), marks:new Map() };
+let db = null, mode = "init";
+const LS = "baustela3d-v1";
+function persistLocal(){ if(mode !== "local") return; try { const o = {}; for(const k of Object.keys(S)) o[k] = Object.fromEntries(S[k]); localStorage.setItem(LS, JSON.stringify(o)); } catch(e){} }
+function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if(o) for(const k of Object.keys(S)) S[k] = new Map(Object.entries(o[k] || {})); } catch(e){} }
+async function put(col, id, data){
+  if(mode === "db"){ try { await db.collection(col).doc(id).set(data); } catch(e){ toast("Čuvanje nije uspelo (" + (e && e.code || "greška") + "). Pokušaj ponovo."); } }
+  else { S[col].set(id, data); persistLocal(); renderAll(); }
+}
+async function del(col, id){
+  if(mode === "db"){ try { await db.collection(col).doc(id).delete(); } catch(e){ toast("Brisanje nije uspelo. Pokušaj ponovo."); } }
+  else { S[col].delete(id); persistLocal(); renderAll(); }
+}
+async function initStore(){
+  let ns = null;
+  try { if(window.claude && typeof window.claude.use === "function") ns = await window.claude.use("db"); } catch(e){ ns = null; }
+  if(ns){
+    db = ns; mode = "db"; $("#sync").textContent = "Sačuvano u oblaku"; $("#sync").classList.add("on");
+    for(const col of Object.keys(S)){
+      db.collection(col).onSnapshot(snap => { S[col] = new Map(snap.docs.map(d => [d.id, d.data()])); renderAll(); },
+        () => toast("Veza sa bazom je prekinuta. Osveži stranicu."));
+    }
+  } else { mode = "local"; loadLocal(); $("#sync").textContent = "Lokalno"; renderAll(); }
+}
+
+/* ---------- stanje prikaza ---------- */
+let cur = TODAY, tab = "dan", floorMax = FLOORS - 1, tool = "dodeli";
+try { const t = localStorage.getItem("baustela-tab"); if(t) tab = t; } catch(e){}
+
+/* ---------- izvedeni podaci ---------- */
+const workers = () => [...S.workers.entries()].map(([id,w]) => ({id, ...w})).sort((a,b) => (a.order ?? 999) - (b.order ?? 999) || String(a.name).localeCompare(String(b.name), "sr"));
+const dayAssign = date => [...S.assignments.entries()].map(([id,a]) => ({id, ...a})).filter(a => a.date === date);
+const dayMarks = date => [...S.marks.entries()].map(([id,m]) => ({id, ...m})).filter(m => m.always ? m.date <= date : m.date === date);
+const dayDoc = date => S.days.get(date) || {};
+const attOf = (date, wid) => { const d = dayDoc(date); return (d.att && d.att[wid]) || null; };
+const wName = wid => { const w = S.workers.get(wid); return w ? w.name : "Obrisan radnik"; };
+const wColor = wid => { const w = S.workers.get(wid); return w ? w.color : "#868E96"; };
+const isHeight = a => (a.floor ?? 0) >= 1 || /Skela|kran|Krov/i.test(a.zone || "");
+const avatar = (wid, cls) => `<span class="av ${cls||""}" style="--c:${wColor(wid)}">${esc(initials(wName(wid)))}</span>`;
+function certState(dateStr, ref){ if(!dateStr) return "none"; const d = diffDays(dateStr, ref); return d < 0 ? "bad" : d <= 30 ? "warn" : "ok"; }
+
+function computeAlerts(date){
+  const out = [], ws = workers(), as = dayAssign(date);
+  const byW = new Map(); as.forEach(a => { if(!byW.has(a.workerId)) byW.set(a.workerId, []); byW.get(a.workerId).push(a); });
+  for(const w of ws){
+    const att = attOf(date, w.id), list = byW.get(w.id) || [];
+    const planned = list.reduce((s,a) => s + (+a.hours || 0), 0);
+    if(att && att.s === "p" && !list.length) out.push({lvl:"warn", t:`${w.name} je prisutan, a nema zaduženje. Plaćeni sati bez rasporeda.`});
+    if(att && att.s !== "p" && list.length) out.push({lvl:"bad", t:`${w.name} ima zaduženje, a vodi se kao „${ATT[att.s]}”. Prerasporedi posao.`});
+    if(planned > 10) out.push({lvl:"warn", t:`${w.name}: planirano ${planned} h u jednom danu.`});
+    if(att && att.s === "p" && planned > 0 && (+att.h || 0) > planned + 1) out.push({lvl:"info", t:`${w.name}: prisutan ${att.h} h, raspoređeno ${planned} h.`});
+    const znr = certState(w.znr, date), lek = certState(w.lek, date);
+    if(list.length){
+      if(znr === "bad" || znr === "none") out.push({lvl:"bad", t:`${w.name}: ${znr==="none"?"nije uneta":"istekla"} obuka za bezbedan rad, a raspoređen je.`});
+      if(list.some(isHeight) && (lek === "bad" || lek === "none")) out.push({lvl:"bad", t:`${w.name} radi na visini bez važećeg lekarskog pregleda.`});
+    }
+    if(znr === "warn") out.push({lvl:"info", t:`${w.name}: obuka za bezbedan rad ističe ${fmtD(w.znr)}.`});
+    if(lek === "warn") out.push({lvl:"info", t:`${w.name}: lekarski pregled ističe ${fmtD(w.lek)}.`});
+  }
+  as.filter(a => a.status === "blok").forEach(a => out.push({lvl:"bad", t:`Zastoj · ${a.zone}: ${a.block || "razlog nije naveden"} (${wName(a.workerId)}).`}));
+  dayMarks(date).filter(m => m.type === "opasnost" && !m.done).forEach(m => out.push({lvl:"bad", t:`Označena opasna zona: ${m.title}.`}));
+  const order = {bad:0, warn:1, info:2};
+  return out.sort((a,b) => order[a.lvl] - order[b.lvl]);
+}
+
+/* ================= 3D ================= */
+const stage = $("#stage");
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.2, 800);
+const HOME = {pos:[38, 24, 40], tgt:[0, 5, 0]};
+camera.position.set(...HOME.pos);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(...HOME.tgt);
+controls.enableDamping = true; controls.dampingFactor = 0.09;
+controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 2.5; controls.maxDistance = 170;
+controls.screenSpacePanning = true; controls.rotateSpeed = 0.7; controls.panSpeed = 0.9;
+
+const ANISO = renderer.capabilities.getMaxAnisotropy();
+function canvasTex(size, draw){
+  const c = document.createElement("canvas"); c.width = c.height = size; const g = c.getContext("2d"); draw(g, size);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; t.anisotropy = ANISO; return t;
+}
+function speckle(g, s, n, colors, maxR){
+  for(let i=0;i<n;i++){ g.fillStyle = colors[(Math.random()*colors.length)|0]; g.globalAlpha = Math.random()*0.5+0.1; const r = Math.random()*maxR+0.5; g.fillRect(Math.random()*s, Math.random()*s, r, r); }
+  g.globalAlpha = 1;
+}
+const TEX = {
+  concrete: canvasTex(256, (g,s) => { g.fillStyle = "#B4B1AA"; g.fillRect(0,0,s,s); speckle(g,s,5000,["#9C9992","#C9C6BF","#8E8B84","#D2CFC9"],2);
+    g.fillStyle = "rgba(60,58,54,.35)"; for(let x=32;x<s;x+=64) for(let y=32;y<s;y+=64){ g.beginPath(); g.arc(x,y,2,0,7); g.fill(); }
+    g.strokeStyle = "rgba(80,78,72,.18)"; g.lineWidth = 1; g.strokeRect(0.5,0.5,s-1,s-1); }),
+  fresh: canvasTex(256, (g,s) => { g.fillStyle = "#CFCBC3"; g.fillRect(0,0,s,s); speckle(g,s,4000,["#BDB9B0","#DEDAD2","#B0ACA3"],2); }),
+  brick: canvasTex(256, (g,s) => { g.fillStyle = "#CFC6B8"; g.fillRect(0,0,s,s); const bh = s/8, bw = s/4;
+    for(let r=0;r<8;r++) for(let c=-1;c<5;c++){ const off = r%2 ? bw/2 : 0; const h = 18+Math.random()*10, l = 36+Math.random()*10;
+      g.fillStyle = `hsl(${h},${52+Math.random()*12}%,${l}%)`; g.fillRect(c*bw+off+2, r*bh+2, bw-4, bh-4); }
+    speckle(g,s,1600,["#7A3A24","#C98B6B","#5E2C1C"],1.5); }),
+  ply: canvasTex(256, (g,s) => { g.fillStyle = "#C99A5E"; g.fillRect(0,0,s,s); g.strokeStyle = "rgba(120,80,40,.35)";
+    for(let i=0;i<40;i++){ g.lineWidth = Math.random()*2+0.5; g.beginPath(); const y = Math.random()*s; g.moveTo(0,y); for(let x=0;x<=s;x+=16) g.lineTo(x, y + Math.sin(x/30+i)*4); g.stroke(); }
+    g.strokeStyle = "rgba(70,45,20,.5)"; g.lineWidth = 2; g.strokeRect(1,1,s-2,s-2); }),
+  ground: canvasTex(512, (g,s) => { g.fillStyle = "#8E7F66"; g.fillRect(0,0,s,s);
+    for(let i=0;i<60;i++){ const x=Math.random()*s,y=Math.random()*s,r=20+Math.random()*60; const gr = g.createRadialGradient(x,y,0,x,y,r); gr.addColorStop(0, Math.random()>.5?"rgba(110,96,74,.45)":"rgba(160,145,118,.35)"); gr.addColorStop(1,"rgba(0,0,0,0)"); g.fillStyle = gr; g.fillRect(x-r,y-r,2*r,2*r); }
+    speckle(g,s,9000,["#6E6250","#A8987C","#5B5143","#B7A98E"],2.5); }),
+  gravel: canvasTex(256, (g,s) => { g.fillStyle = "#8D8981"; g.fillRect(0,0,s,s); speckle(g,s,9000,["#6F6B64","#A8A39A","#5D5A54","#C0BCB3"],3); }),
+  asphalt: canvasTex(256, (g,s) => { g.fillStyle = "#3C3F42"; g.fillRect(0,0,s,s); speckle(g,s,7000,["#2E3134","#55595D","#47494C"],2); })
+};
+function worldUV(geom, tile){
+  const p = geom.attributes.position, n = geom.attributes.normal, uv = geom.attributes.uv;
+  for(let i=0;i<p.count;i++){
+    const nx = Math.abs(n.getX(i)), ny = Math.abs(n.getY(i)), nz = Math.abs(n.getZ(i));
+    let u, v; if(ny >= nx && ny >= nz){ u = p.getX(i); v = p.getZ(i); } else if(nx >= nz){ u = p.getZ(i); v = p.getY(i); } else { u = p.getX(i); v = p.getY(i); }
+    uv.setXY(i, u/tile, v/tile);
+  }
+  uv.needsUpdate = true; return geom;
+}
+const SM = (o) => new THREE.MeshStandardMaterial(Object.assign({roughness:0.85, metalness:0}, o));
+const mat = {
+  concrete: SM({map:TEX.concrete}), concDark: SM({map:TEX.concrete, color:0xA6A39C}), fresh: SM({map:TEX.fresh}),
+  brick: SM({map:TEX.brick, roughness:0.92}), ply: SM({map:TEX.ply, roughness:0.75}),
+  ground: SM({map:TEX.ground, roughness:1}), gravel: SM({map:TEX.gravel, roughness:1}), asphalt: SM({map:TEX.asphalt, roughness:0.95}),
+  steel: SM({color:0x6C757D, metalness:0.6, roughness:0.45}), galv: SM({color:0x9AA3AA, metalness:0.7, roughness:0.35}),
+  yellow: SM({color:0xF2B200, metalness:0.25, roughness:0.5}), orange: SM({color:0xE8590C, roughness:0.6}),
+  white: SM({color:0xE9ECEF, roughness:0.6}), blue: SM({color:0x2F6690, roughness:0.6}), dark: SM({color:0x24292E, roughness:0.7}),
+  rebar: SM({color:0x7A4A2E, metalness:0.5, roughness:0.6}), sand: SM({color:0xCDB17A, roughness:1}),
+  glass: SM({color:0x6E93A8, metalness:0.4, roughness:0.08, transparent:true, opacity:0.55}),
+  frame: SM({color:0xF1F3F5, roughness:0.5}), net: SM({color:0x2F7D4E, roughness:0.9, transparent:true, opacity:0.42, side:THREE.DoubleSide}),
+  leaf: SM({color:0x4D7A3A, roughness:0.95}), trunk: SM({color:0x5A4330}),
+  plank: SM({map:TEX.ply, color:0xB98A55}), tire: SM({color:0x1B1D1F, roughness:0.9}),
+  proxy: new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false})
+};
+const edgeMat = new THREE.LineBasicMaterial({color:0x1b2024, transparent:true, opacity:0.16});
+
+const clickables = [], buildParts = [];
+function addMesh(mesh, ud, vis, opt){
+  opt = opt || {};
+  mesh.castShadow = opt.shadow !== false; mesh.receiveShadow = true;
+  if(ud){ mesh.userData = ud; clickables.push(mesh); }
+  if(vis != null) buildParts.push({mesh, vis});
+  if(opt.edges){ const e = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMat); mesh.add(e); }
+  scene.add(mesh); return mesh;
+}
+function box(w,h,d,x,y,z,m,ud,vis,opt){
+  opt = opt || {};
+  const g = new THREE.BoxGeometry(w,h,d); if(opt.tile) worldUV(g, opt.tile);
+  const mesh = new THREE.Mesh(g, m); mesh.position.set(x,y,z); return addMesh(mesh, ud, vis, opt);
+}
+function cyl(r,h,x,y,z,m,ud,vis,opt){
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,(opt&&opt.seg)||8), m); mesh.position.set(x,y,z); return addMesh(mesh, ud, vis, opt);
+}
+const UP = new THREE.Vector3(0,1,0);
+function strut(a, b, r, m, vis, shadow){
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), len = d.length();
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), m);
+  mesh.position.copy(A).add(B).multiplyScalar(0.5); mesh.quaternion.setFromUnitVectors(UP, d.normalize());
+  return addMesh(mesh, null, vis, {shadow: !!shadow});
+}
+
+/* nebo i svetlo prema temi */
+const hemi = new THREE.HemisphereLight(0xDCE8F2, 0x6B5D48, 0.6); scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff, 0.12); scene.add(amb);
+const sun = new THREE.DirectionalLight(0xFFF4E5, 1.55);
+sun.position.set(40, 62, 26); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera, {left:-48, right:48, top:48, bottom:-48, near:1, far:170}); scene.add(sun);
+function isDark(){ const t = document.documentElement.getAttribute("data-theme"); return t ? t === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; }
+function applyTheme(){
+  const dark = isDark();
+  const top = dark ? "#0E1A26" : "#8DB6D9", mid = dark ? "#2A3442" : "#C9DCEA", hor = dark ? "#5A4A3E" : "#EDE8DF";
+  const c = document.createElement("canvas"); c.width = 4; c.height = 512; const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0,0,0,512); gr.addColorStop(0, top); gr.addColorStop(0.62, mid); gr.addColorStop(1, hor); g.fillStyle = gr; g.fillRect(0,0,4,512);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; scene.background = t;
+  scene.fog = new THREE.Fog(new THREE.Color(hor), 120, 300);
+  hemi.intensity = dark ? 0.35 : 0.6; sun.intensity = dark ? 1.05 : 1.55; sun.color.set(dark ? 0xFFD2A6 : 0xFFF4E5);
+  renderer.toneMappingExposure = dark ? 0.95 : 1.05;
+}
+applyTheme();
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+
+/* teren */
+const gGeo = new THREE.PlaneGeometry(160, 160); { const p = gGeo.attributes.position, uv = gGeo.attributes.uv; for(let i=0;i<p.count;i++) uv.setXY(i, p.getX(i)/9, p.getY(i)/9); }
+const ground = new THREE.Mesh(gGeo, mat.ground); ground.rotation.x = -Math.PI/2; ground.position.y = -0.3;
+addMesh(ground, {kind:"teren", zone:"Teren / spoljni radovi"}, null, {shadow:false});
+box(27, 0.06, 21, 0, -0.27, 0, mat.gravel, {kind:"teren", zone:"Plato oko objekta"}, null, {tile:4, shadow:false});
+box(7, 0.06, 20, -15, -0.27, 17, mat.asphalt, {kind:"put", zone:"Pristupni put"}, null, {tile:5, shadow:false});
+
+/* objekat P+3 */
+const XS = [-9.5,-4.75,0,4.75,9.5], ZS = [-6.5,0,6.5];
+const bld = (f, part) => ({kind:"bld", floor:f, part});
+for(let f=0; f<FLOORS; f++) box(20.6, 0.3, 14.6, 0, f*H - 0.15, 0, f===3 ? mat.fresh : mat.concrete, bld(f), f, {tile:3, edges:true});
+for(let f=0; f<FLOORS; f++){
+  const ch = H - 0.3, cy = f*H + ch/2;
+  XS.forEach((x,i) => ZS.forEach((z,j) => {
+    if(f === 3){
+      if((i+j) % 2 === 0) box(0.72, ch, 0.72, x, cy, z, mat.ply, bld(f,"oplata stuba"), f, {tile:1.2, edges:true});
+      else { box(0.45, 0.6, 0.45, x, f*H + 0.3, z, mat.fresh, bld(f), f, {tile:1});
+             [-.13,.13].forEach(dx => [-.13,.13].forEach(dz => cyl(0.025, 1.8, x+dx, f*H + 1.2, z+dz, mat.rebar, null, f, {shadow:false}))); }
+    } else box(0.45, ch, 0.45, x, cy, z, mat.concDark, bld(f), f, {tile:1.5, edges:true});
+  }));
+}
+function bayWalls(f, z, full, glass){
+  const ch = H - 0.3, base = f*H, ud = bld(f, "zidovi");
+  for(let i=0; i<XS.length-1; i++){
+    const x0 = XS[i] + 0.23, x1 = XS[i+1] - 0.23, w = x1 - x0, cx = (x0+x1)/2;
+    box(w, 1.0, 0.25, cx, base + 0.5, z, mat.brick, ud, f, {tile:1});
+    if(!full && i % 2 === 1) continue;
+    box(w, 0.55, 0.25, cx, base + ch - 0.275, z, mat.brick, ud, f, {tile:1});
+    const ph = ch - 1.55, py = base + 1.0 + ph/2;
+    box(0.9, ph, 0.25, x0 + 0.45, py, z, mat.brick, ud, f, {tile:1});
+    box(0.9, ph, 0.25, x1 - 0.45, py, z, mat.brick, ud, f, {tile:1});
+    if(glass){
+      const gw = w - 1.8;
+      box(gw, ph, 0.04, cx, py, z, mat.glass, ud, f, {shadow:false});
+      box(gw + 0.08, 0.07, 0.12, cx, base + 1.0, z, mat.frame, null, f, {shadow:false});
+      box(gw + 0.08, 0.07, 0.12, cx, base + 1.0 + ph, z, mat.frame, null, f, {shadow:false});
+      box(0.06, ph, 0.12, cx, py, z, mat.frame, null, f, {shadow:false});
+    }
+  }
+}
+for(let f=0; f<3; f++){
+  bayWalls(f, -7.0, f < 2, f === 0); bayWalls(f, 7.0, f < 2, f === 0);
+  if(f < 2) [-10.05, 10.05].forEach(x => box(0.25, H-0.3, 13.6, x, f*H + (H-0.3)/2, 0, mat.brick, bld(f,"zidovi"), f, {tile:1}));
+}
+for(let f=0; f<FLOORS; f++) box(3.0, H, 3.2, 6.9, f*H + H/2 - 0.15, -3.4, mat.concDark, bld(f, "stepenište / lift"), f, {tile:2, edges:true});
+/* oplata ploče iznad 3. sprata, sektor A, i armaturna mreža */
+box(7.2, 0.08, 14.2, -6.4, 4*H - 0.3, 0, mat.ply, bld(3, "oplata ploče"), 3, {tile:2.4, edges:true});
+for(let x=-9; x<=-4; x+=1.25) for(let z=-6; z<=6; z+=2) cyl(0.03, H-0.4, x, 3*H + (H-0.4)/2, z, mat.galv, null, 3, {shadow:false});
+for(let x=-3; x<=9.6; x+=0.6) box(0.025, 0.025, 14, x, 3*H + 0.03, 0, mat.rebar, null, 3, {shadow:false});
+for(let z=-6.8; z<=6.8; z+=0.6) box(12.6, 0.025, 0.025, 3.3, 3*H + 0.05, z, mat.rebar, null, 3, {shadow:false});
+
+/* fasadna skela sa zaštitnom mrežom */
+for(let i=0; i<=10; i++){ const x = -10.5 + i*2.1;
+  [7.55, 8.65].forEach(z => cyl(0.045, 4*H + 1, x, (4*H+1)/2 - 0.3, z, mat.galv, {kind:"skela"}, null, {shadow:false}));
+  for(let k=0; k<4; k++) if(i < 10) strut([x, k*H, 8.65], [x+2.1, (k+1)*H, 8.65], 0.03, mat.galv, k);
+}
+for(let k=1; k<=4; k++){
+  box(21.2, 0.06, 1.15, 0, k*H - 0.04, 8.1, mat.plank, {kind:"skela", floor:k-1}, k-1, {tile:2});
+  [7.55, 8.65].forEach(z => box(21.2, 0.045, 0.045, 0, k*H + 1.0, z, mat.yellow, null, k-1, {shadow:false}));
+}
+const net = new THREE.Mesh(new THREE.PlaneGeometry(21.2, 2*H), mat.net); net.position.set(0, 2*H + H, 8.72); addMesh(net, {kind:"skela", floor:2}, 2, {shadow:false});
+
+/* toranjski kran sa rešetkom */
+const CX = 16, CZ = -11, CH = 30, cw = 0.75;
+box(2.2, 0.8, 2.2, CX, 0.1, CZ, mat.concDark, {kind:"kran", zone:"Toranjski kran"}, null, {tile:1});
+const corners = [[-cw,-cw],[cw,-cw],[cw,cw],[-cw,cw]];
+corners.forEach(([dx,dz]) => strut([CX+dx, 0.5, CZ+dz], [CX+dx, CH, CZ+dz], 0.07, mat.yellow, null, true));
+for(let y=0.5; y<CH-0.5; y+=2.5){
+  for(let k=0;k<4;k++){ const a = corners[k], b = corners[(k+1)%4];
+    strut([CX+a[0], y, CZ+a[1]], [CX+b[0], y, CZ+b[1]], 0.035, mat.yellow);
+    strut([CX+a[0], y, CZ+a[1]], [CX+b[0], y+2.5, CZ+b[1]], 0.03, mat.yellow); }
+}
+const JY = CH + 0.4, jEnd = -12, cEnd = 25;
+[[-0.6],[0.6]].forEach(([dz]) => strut([cEnd, JY, CZ+dz], [jEnd, JY, CZ+dz], 0.06, mat.yellow, null, true));
+strut([CX, JY+1.5, CZ], [jEnd, JY+1.2, CZ], 0.06, mat.yellow, null, true);
+for(let x=CX; x>jEnd+0.5; x-=2){ strut([x, JY, CZ-0.6], [x-2, JY+1.3, CZ], 0.03, mat.yellow); strut([x, JY, CZ+0.6], [x-2, JY+1.3, CZ], 0.03, mat.yellow); strut([x, JY, CZ-0.6], [x, JY, CZ+0.6], 0.03, mat.yellow); }
+strut([CX, CH, CZ], [CX, CH+6, CZ], 0.12, mat.yellow, null, true);
+strut([CX, CH+6, CZ], [jEnd+2, JY+1.2, CZ], 0.025, mat.steel); strut([CX, CH+6, CZ], [cEnd, JY, CZ], 0.025, mat.steel);
+box(3.2, 2.2, 1.6, cEnd - 1.6, JY - 0.8, CZ, mat.concDark, null, null, {tile:1});
+box(1.8, 1.6, 1.6, CX - 1.6, CH - 0.4, CZ + 1.3, mat.white);
+box(1.2, 0.9, 0.05, CX - 1.6, CH - 0.2, CZ + 2.12, mat.glass, null, null, {shadow:false});
+const HX = -1.5;
+box(0.8, 0.35, 1.4, HX, JY - 0.3, CZ, mat.dark);
+cyl(0.02, JY - 15, HX, (JY + 15)/2, CZ, mat.steel, null, null, {shadow:false});
+box(0.6, 0.6, 0.4, HX, 14.7, CZ, mat.orange);
+box(1.3, 0.9, 1.1, HX, 13.8, CZ, mat.brick, null, null, {tile:1});
+const prox = (w,h,d,x,y,z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat.proxy); m.position.set(x,y,z); m.userData = {kind:"kran", zone:"Toranjski kran"}; clickables.push(m); scene.add(m); };
+prox(1.8, CH, 1.8, CX, CH/2, CZ); prox(cEnd - jEnd, 2.2, 1.6, (cEnd + jEnd)/2, JY + 0.6, CZ);
+
+/* kontejneri, deponija, vozila, ograda, drveće */
+const office = {kind:"kont", zone:"Kancelarija (kontejner)"};
+box(6, 2.6, 2.4, -20, 1.0, 13, mat.blue, office); box(6, 2.6, 2.4, -20, 3.6, 13, mat.white, office);
+[-21.5,-18.5].forEach(x => { box(1.2, 1.0, 0.05, x, 1.3, 14.22, mat.glass, null, null, {shadow:false}); box(1.2, 1.0, 0.05, x, 3.9, 14.22, mat.glass, null, null, {shadow:false}); });
+box(1.1, 2.3, 1.1, -24.5, 0.85, 13, mat.blue, {kind:"kont", zone:"Sanitarni čvor"});
+const yard = {kind:"dep", zone:"Deponija materijala"};
+for(let i=0;i<3;i++) for(let j=0;j<2;j++){ box(1.25, 0.14, 1.05, 14+i*1.7, -0.2, 9+j*1.6, mat.plank, yard, null, {tile:1}); box(1.15, 0.95, 0.95, 14+i*1.7, 0.4, 9+j*1.6, mat.brick, yard, null, {tile:0.9}); }
+for(let i=0;i<9;i++){ const r = cyl(0.05, 7, 17.5, -0.15 + (i%3)*0.11, 14.5 + Math.floor(i/3)*0.12 + (i%3)*0.01, mat.rebar, yard, null, {shadow:false}); r.rotation.z = Math.PI/2; }
+const sandPile = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.0, 24), mat.sand); sandPile.position.set(22, 0.7, 12); addMesh(sandPile, yard);
+box(4, 0.25, 2.4, 22, -0.15, 5, mat.plank, yard, null, {tile:1.5});
+for(let i=0;i<5;i++) box(3.8, 0.04, 2.3, 22, 0.0 + i*0.05, 5, mat.ply, null, null, {tile:2});
+// mešalica za beton
+const truck = {kind:"voz", zone:"Mešalica za beton"};
+box(2.4, 0.5, 7.5, -15, 0.45, 19, mat.dark, truck); box(2.4, 2.0, 1.8, -15, 1.7, 22.2, mat.white, truck);
+box(2.2, 0.8, 0.05, -15, 2.1, 23.12, mat.glass, null, null, {shadow:false});
+const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 0.7, 4.6, 20), mat.orange); drum.rotation.x = Math.PI/2 - 0.2; drum.position.set(-15, 2.1, 18.3); addMesh(drum, truck);
+[[-1.25,21.6],[1.25,21.6],[-1.25,17.4],[1.25,17.4],[-1.25,16.1],[1.25,16.1]].forEach(([dx,z]) => { const w = cyl(0.5, 0.35, -15+dx, 0.2, z, mat.tire, truck, null, {seg:14}); w.rotation.z = Math.PI/2; });
+const fence = {kind:"ogr", zone:"Ograda gradilišta"};
+[[0,-26,64,.08],[-30,0,.08,52],[30,0,.08,52]].forEach(([x,z,w,d]) => box(w, 2.0, d, x, 0.7, z, mat.white, fence));
+box(38, 2.0, .08, 13, 0.7, 26, mat.white, fence); box(14, 2.0, .08, -25, 0.7, 26, mat.white, fence);
+for(let x=-31; x<=31; x+=4) box(0.12, 2.2, 0.12, x, 0.8, -26, mat.galv, null, null, {shadow:false});
+function tree(x, z, s){ const t = cyl(0.18*s, 2.2*s, x, -0.3 + 1.1*s, z, mat.trunk); const l = new THREE.Mesh(new THREE.IcosahedronGeometry(1.7*s, 1), mat.leaf); l.position.set(x, -0.3 + 3.1*s, z); addMesh(l); }
+[[-36,-30,1.2],[-40,-12,1],[-38,8,1.3],[36,-32,1.1],[40,-6,1.3],[38,18,1],[-34,32,1.2],[10,34,1.1],[24,36,1.3],[-6,-36,1.2],[18,-38,1]].forEach(a => tree(...a));
+
+function zoneFromHit(obj, p){
+  const ud = obj.userData || {};
+  if(ud.kind === "bld" || ud.kind === "skela"){
+    const f = ud.floor != null ? ud.floor : Math.max(0, Math.min(FLOORS-1, Math.floor((p.y + 0.1) / H)));
+    if(ud.kind === "skela") return {zone:`Skela · nivo ${f}`, floor:f};
+    const sek = p.x < -3.3 ? "A" : p.x > 3.3 ? "C" : "B";
+    return {zone:`${floorName(f)} · Sektor ${sek}${ud.part ? " · " + ud.part : ""}`, floor:f};
+  }
+  return {zone: ud.zone || "Gradilište", floor: 0};
+}
+
+/* spratovi */
+function buildFloorGrp(){
+  const g = $("#floorGrp");
+  g.innerHTML = [3,2,1,0].map(i => `<button class="tool" data-f="${i}" aria-pressed="${floorMax===i}" data-tip="${i===3 ? "Ceo objekat" : "Prikaži do: " + floorName(i)}" aria-label="Prikaži do sprata ${i===0?"P":i}">${i===0?"P":i}</button>`).join("") + `<span class="cap">Sprat</span>`;
+  g.querySelectorAll("button").forEach(b => b.onclick = () => setFloor(+b.dataset.f));
+}
+function setFloor(f){ floorMax = f; applyFloors(); buildFloorGrp(); }
+function applyFloors(){
+  buildParts.forEach(p => p.mesh.visible = p.vis <= floorMax);
+  markers.forEach(m => m.group.visible = (m.floor ?? 0) <= floorMax);
+  markObjs.forEach(m => m.group.visible = (m.floor ?? 0) <= floorMax);
+}
+
+/* markeri radnika */
+let markers = [];
+const markerGroup = new THREE.Group(); scene.add(markerGroup);
+const labelsEl = $("#labels");
+function rebuildMarkers(){
+  markers.forEach(m => { markerGroup.remove(m.group); m.label.remove(); }); markers = [];
+  dayAssign(cur).forEach(a => {
+    const g = new THREE.Group(), col = new THREE.Color(wColor(a.workerId));
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1.55,6), mat.galv); pole.position.y = 0.78;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 20, 14), new THREE.MeshStandardMaterial({color:col, emissive:col, emissiveIntensity:0.35, roughness:0.35}));
+    head.position.y = 1.75;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.55, 28), new THREE.MeshBasicMaterial({color: a.status === "blok" ? 0xD9302C : col, transparent:true, opacity:0.55, depthWrite:false}));
+    disc.rotation.x = -Math.PI/2; disc.position.y = 0.03;
+    [pole, head, disc].forEach(o => { o.userData = {aid:a.id}; g.add(o); });
+    g.position.set(a.x || 0, a.y || 0, a.z || 0); markerGroup.add(g);
+    const lb = document.createElement("button");
+    lb.className = "lbl" + (a.status === "blok" ? " blok" : "") + (a.status === "gotovo" ? " done" : "");
+    lb.innerHTML = `${avatar(a.workerId)}<span class="t">${esc(wName(a.workerId))}<small>${esc(a.task || "")}${a.status === "blok" ? " · zastoj" : ""}</small></span>`;
+    lb.onclick = () => openAssign({edit:a.id});
+    labelsEl.appendChild(lb);
+    markers.push({id:a.id, group:g, label:lb, floor:a.floor, head, h:2.3});
+  });
+  applyFloors();
+}
+
+/* oznake (zaokruživanja) */
+let markObjs = [];
+const markGroup = new THREE.Group(); scene.add(markGroup);
+function centroid(pts){ const c = [0,0,0]; pts.forEach(p => { c[0]+=p[0]; c[1]+=p[1]; c[2]+=p[2]; }); return c.map(v => v / pts.length); }
+function buildMarkMesh(pts, color, done){
+  const g = new THREE.Group(), V = pts.map(p => new THREE.Vector3(...p)), col = new THREE.Color(color);
+  const curve = new THREE.CatmullRomCurve3(V, true, "centripetal");
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.min(300, V.length*4), 0.075, 7, true), new THREE.MeshBasicMaterial({color:col}));
+  const xray = new THREE.Mesh(tube.geometry, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0.28, depthTest:false}));
+  xray.renderOrder = 10;
+  const c = new THREE.Vector3(...centroid(pts)), sm = curve.getSpacedPoints(Math.min(160, V.length*3)), pos = [];
+  for(let i=0;i<sm.length-1;i++){ pos.push(c.x,c.y,c.z, sm[i].x,sm[i].y,sm[i].z, sm[i+1].x,sm[i+1].y,sm[i+1].z); }
+  const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  const fill = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0.2, side:THREE.DoubleSide, depthWrite:false}));
+  fill.renderOrder = 5;
+  if(done){ tube.material.transparent = true; tube.material.opacity = 0.45; xray.material.opacity = 0.1; }
+  g.add(fill, tube, xray);
+  return {g, fill, tube};
+}
+function rebuildMarks(){
+  markObjs.forEach(m => { markGroup.remove(m.group); m.label.remove(); m.group.traverse(o => o.geometry && o.geometry.dispose()); }); markObjs = [];
+  dayMarks(cur).forEach(m => {
+    if(!Array.isArray(m.points) || m.points.length < 3) return;
+    const color = (MTYPES[m.type] || MTYPES.paznja).c, built = buildMarkMesh(m.points, color, m.done);
+    built.g.children.forEach(o => { if(o !== built.fill) o.userData = {mid:m.id}; });
+    markGroup.add(built.g);
+    const lb = document.createElement("button"); lb.className = "mlbl" + (m.done ? " done" : ""); lb.style.setProperty("--mc", color);
+    lb.innerHTML = `${ICON.mark}<span>${esc(m.title || "Oznaka")}</span>`; lb.onclick = () => openMark({edit:m.id});
+    labelsEl.appendChild(lb);
+    const top = m.points.reduce((a,p) => Math.max(a, p[1]), -99), c = centroid(m.points);
+    markObjs.push({id:m.id, group:built.g, fill:built.fill, label:lb, floor:m.floor, anchor:new THREE.Vector3(c[0], top + 0.9, c[2]), done:m.done});
+  });
+  applyFloors();
+}
+
+function renderLegend(){
+  const ids = new Set(dayAssign(cur).map(a => a.workerId));
+  $("#legend").innerHTML = workers().filter(w => ids.has(w.id)).slice(0, 10).map(w => `<span class="chip"><span class="av" style="--c:${w.color}">${esc(initials(w.name))}</span>${esc(w.name)}</span>`).join("");
+}
+
+/* ---------- unos mišem: alati, crtanje, zum ---------- */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function setRay(ev){ const r = renderer.domElement.getBoundingClientRect(); ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1; ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1; ray.setFromCamera(ndc, camera); }
+function visibleDeep(o){ while(o){ if(!o.visible) return false; o = o.parent; } return true; }
+function hit(ev, targets){ setRay(ev); return ray.intersectObjects(targets, true).find(h => visibleDeep(h.object)); }
+const siteHit = ev => hit(ev, clickables);
+
+const reticle = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.42, 36), new THREE.MeshBasicMaterial({color:0xF25C05, transparent:true, opacity:0.95, depthTest:false, side:THREE.DoubleSide}));
+reticle.renderOrder = 20; reticle.visible = false; scene.add(reticle);
+function placeReticle(h){
+  if(!h){ reticle.visible = false; return; }
+  const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : UP.clone();
+  reticle.position.copy(h.point).addScaledVector(n, 0.04); reticle.lookAt(h.point.clone().addScaledVector(n, 1)); reticle.visible = true;
+}
+
+const TOOL_TEXT = {
+  dodeli: ["Dodeli", "Klikni na model da dodeliš posao · dupli klik približava"],
+  lasso: ["Zaokruži", "Drži i povuci po modelu da zaokružiš deo koji želiš da naglasiš"],
+  krug: ["Krug", "Klikni na centar i povuci da odrediš veličinu kruga"],
+  pregled: ["Pregled", "Klikni na deo modela da ga približiš · točkić zumira ka kursoru"]
+};
+function setTool(t){
+  tool = t; stage.dataset.mode = t;
+  document.querySelectorAll(".tool[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === t));
+  setStatus(...TOOL_TEXT[t]);
+}
+function setStatus(k, t){ $("#stK").textContent = k; $("#stT").textContent = t; }
+document.querySelectorAll(".tool[data-mode]").forEach(b => b.onclick = () => setTool(b.dataset.mode));
+
+/* crtanje */
+let draw = null;
+const previewMat = new THREE.LineBasicMaterial({color:0xF25C05, depthTest:false, transparent:true});
+const preview = new THREE.Line(new THREE.BufferGeometry(), previewMat); preview.renderOrder = 30; preview.frustumCulled = false; preview.visible = false; scene.add(preview);
+function setPreview(pts, closed){
+  const arr = []; pts.forEach(p => arr.push(p.x, p.y, p.z)); if(closed && pts.length) arr.push(pts[0].x, pts[0].y, pts[0].z);
+  preview.geometry.dispose(); preview.geometry = new THREE.BufferGeometry(); preview.geometry.setAttribute("position", new THREE.Float32BufferAttribute(arr.length ? arr : [0,0,0,0,0,0], 3));
+  preview.visible = pts.length > 1;
+}
+function circlePts(c, n, r, count){
+  const a = Math.abs(n.y) < 0.9 ? UP.clone() : new THREE.Vector3(1,0,0);
+  const u = new THREE.Vector3().crossVectors(n, a).normalize(), v = new THREE.Vector3().crossVectors(n, u).normalize(), out = [];
+  for(let i=0;i<count;i++){ const t = i / count * Math.PI * 2; out.push(c.clone().addScaledVector(u, Math.cos(t)*r).addScaledVector(v, Math.sin(t)*r).addScaledVector(n, 0.05)); }
+  return out;
+}
+function simplify(pts, max){ if(pts.length <= max) return pts; const out = [], step = pts.length / max; for(let i=0;i<max;i++) out.push(pts[Math.floor(i*step)]); return out; }
+
+let downAt = null, clickTimer = null;
+const cv = renderer.domElement;
+cv.addEventListener("pointerdown", e => {
+  downAt = {x:e.clientX, y:e.clientY};
+  if((tool === "lasso" || tool === "krug") && e.button === 0){
+    const h = siteHit(e); if(!h) return;
+    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : UP.clone();
+    controls.enabled = false; stage.classList.add("drawing"); cv.setPointerCapture(e.pointerId);
+    draw = {kind:tool, pts:[h.point.clone().addScaledVector(n, 0.06)], c:h.point.clone(), n, r:0, obj:h.object};
+    reticle.visible = false;
+  }
+});
+cv.addEventListener("pointermove", e => {
+  if(draw){
+    if(draw.kind === "lasso"){
+      const h = siteHit(e); if(!h) return;
+      const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : UP.clone();
+      const p = h.point.clone().addScaledVector(n, 0.06);
+      if(p.distanceTo(draw.pts[draw.pts.length-1]) > 0.18){ draw.pts.push(p); setPreview(draw.pts, false); }
+    } else {
+      setRay(e); const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(draw.n, draw.c), q = new THREE.Vector3();
+      if(ray.ray.intersectPlane(plane, q)){ draw.r = Math.min(25, q.distanceTo(draw.c)); draw.pts = circlePts(draw.c, draw.n, draw.r, 56); setPreview(draw.pts, true); setStatus("Krug", `Prečnik ${(draw.r*2).toFixed(1)} m · pusti da završiš`); }
+    }
+    return;
+  }
+  if(e.buttons) return;
+  hover(e);
+});
+function endDraw(e){
+  if(!draw) return;
+  const d = draw; draw = null; controls.enabled = true; stage.classList.remove("drawing"); setPreview([], false);
+  try { cv.releasePointerCapture(e.pointerId); } catch(_){}
+  setTool(tool);
+  let pts = d.pts;
+  if(d.kind === "krug" && d.r < 0.35){ toast("Krug je premali. Povuci dalje od centra."); return; }
+  if(d.kind === "lasso" && pts.length < 6){ toast("Povuci duže da zaokružiš deo modela."); return; }
+  pts = simplify(pts, 90).map(p => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]);
+  const c = centroid(pts), z = zoneFromHit(d.obj, new THREE.Vector3(...c));
+  openMark({points:pts, shape:d.kind, zone:z.zone, floor:z.floor});
+}
+cv.addEventListener("pointerup", e => {
+  if(draw){ endDraw(e); return; }
+  if(!downAt) return; const moved = Math.hypot(e.clientX-downAt.x, e.clientY-downAt.y); downAt = null;
+  if(moved > 6 || e.button !== 0) return;
+  const mh = hit(e, markerGroup.children); if(mh && mh.object.userData.aid){ openAssign({edit:mh.object.userData.aid}); return; }
+  const kh = hit(e, markGroup.children); if(kh && kh.object.userData.mid && tool !== "lasso" && tool !== "krug"){ openMark({edit:kh.object.userData.mid}); return; }
+  const h = siteHit(e); if(!h) return;
+  if(tool === "pregled"){ zoomToPoint(h.point); return; }
+  if(tool === "dodeli"){
+    clearTimeout(clickTimer);
+    const z = zoneFromHit(h.object, h.point), pt = {x:h.point.x, y:h.point.y, z:h.point.z};
+    clickTimer = setTimeout(() => openAssign({point:pt, zone:z.zone, floor:z.floor}), 260);
+  }
+});
+cv.addEventListener("pointercancel", e => { if(draw){ draw = null; controls.enabled = true; stage.classList.remove("drawing"); setPreview([], false); } });
+cv.addEventListener("dblclick", e => { clearTimeout(clickTimer); const h = siteHit(e); if(h) zoomToPoint(h.point); });
+let hoverPending = false;
+function hover(e){
+  if(hoverPending) return; hoverPending = true;
+  requestAnimationFrame(() => {
+    hoverPending = false;
+    const mh = hit(e, markerGroup.children);
+    if(mh && mh.object.userData.aid){ const a = S.assignments.get(mh.object.userData.aid); reticle.visible = false; if(a) setStatus("Radnik", `${wName(a.workerId)} · ${a.task} · klikni za izmenu`); return; }
+    const h = siteHit(e); placeReticle(h);
+    if(h) setStatus(TOOL_TEXT[tool][0], zoneFromHit(h.object, h.point).zone); else setStatus(...TOOL_TEXT[tool]);
+  });
+}
+cv.addEventListener("pointerleave", () => { reticle.visible = false; });
+
+/* zum ka kursoru */
+function zoomAround(p, factor){
+  const off = camera.position.clone().sub(p), len = off.length();
+  const nl = THREE.MathUtils.clamp(len * factor, 1.6, controls.maxDistance), k = nl / len;
+  camera.position.copy(p).add(off.multiplyScalar(k));
+  controls.target.sub(p).multiplyScalar(k).add(p);
+}
+stage.addEventListener("wheel", e => {
+  if(e.target !== cv) return;
+  e.preventDefault(); e.stopPropagation();
+  const h = siteHit(e); let p;
+  if(h) p = h.point; else { setRay(e); p = ray.ray.at(camera.position.distanceTo(controls.target), new THREE.Vector3()); }
+  const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  zoomAround(p, Math.exp(THREE.MathUtils.clamp(d, -120, 120) * 0.0022));
+}, {capture:true, passive:false});
+function flyTo(pos, target, dur){
+  const p0 = camera.position.clone(), t0 = controls.target.clone(), p1 = new THREE.Vector3(...pos), t1 = new THREE.Vector3(...target);
+  const D = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 1 : (dur || 700), s = performance.now();
+  (function step(now){ const k = Math.min(1, (now - s) / D), e = 1 - Math.pow(1-k, 3); camera.position.lerpVectors(p0, p1, e); controls.target.lerpVectors(t0, t1, e); if(k < 1) requestAnimationFrame(step); })(s);
+}
+function zoomToPoint(p){
+  const dir = camera.position.clone().sub(controls.target).normalize(), dist = Math.max(4, camera.position.distanceTo(controls.target) * 0.4);
+  const np = p.clone().addScaledVector(dir, dist); flyTo([np.x, Math.max(np.y, p.y + 1.2), np.z], [p.x, p.y, p.z]);
+}
+const zoomBtn = f => { const t = controls.target.clone(); const p0 = camera.position.clone(); zoomAround(t, f); const p1 = camera.position.clone(); camera.position.copy(p0); flyTo([p1.x,p1.y,p1.z], [t.x,t.y,t.z], 260); };
+$("#zIn").onclick = () => zoomBtn(0.6); $("#zOut").onclick = () => zoomBtn(1.6);
+$("#zFit").onclick = $("#camIso").onclick = () => flyTo(HOME.pos, HOME.tgt);
+$("#camTop").onclick = () => flyTo([0.1, 72, 0.1], [0, 0, 0]);
+$("#camFront").onclick = () => flyTo([0, 7, 44], [0, 6, 0]);
+function focusPoint(x, y, z, floor){
+  if((floor ?? 0) > floorMax) setFloor(floor);
+  flyTo([x + 9, y + 7, z + 11], [x, y + 0.8, z]);
+}
+function focusAssign(id){ const a = S.assignments.get(id); if(a) focusPoint(a.x, a.y, a.z, a.floor); }
+function focusMark(id){ const m = S.marks.get(id); if(!m) return; const c = centroid(m.points); const r = m.points.reduce((a,p) => Math.max(a, Math.hypot(p[0]-c[0], p[2]-c[2])), 2);
+  if((m.floor ?? 0) > floorMax) setFloor(m.floor); flyTo([c[0] + r*1.6 + 4, c[1] + r*1.4 + 4, c[2] + r*1.8 + 5], c); }
+
+/* prečice */
+document.addEventListener("keydown", e => {
+  if(e.target.closest && e.target.closest("input,textarea,select")) return;
+  if($("#modalRoot").children.length) return;
+  const k = e.key.toLowerCase();
+  if(k === "v") setTool("dodeli"); else if(k === "l") setTool("lasso"); else if(k === "c") setTool("krug"); else if(k === "h") setTool("pregled");
+  else if(k === "+" || k === "=") zoomBtn(0.6); else if(k === "-") zoomBtn(1.6); else if(k === "0") flyTo(HOME.pos, HOME.tgt);
+  else if(["1","2","3","4"].includes(k)) setFloor(+k - 1);
+  else if(k === "escape" && draw){ draw = null; controls.enabled = true; stage.classList.remove("drawing"); setPreview([], false); }
+});
+
+/* petlja */
+function resize(){
+  const r = stage.getBoundingClientRect(); if(!r.width || !r.height) return;
+  renderer.setSize(r.width, r.height, false); camera.aspect = r.width / r.height;
+  const off = (!$("#app").classList.contains("collapsed") && window.innerWidth > 900) ? Math.min(215, r.width * 0.2) : 0;
+  if(off) camera.setViewOffset(r.width, r.height, off, 0, r.width, r.height); else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage); resize();
+const v3 = new THREE.Vector3();
+function place(el, pos, r){ v3.copy(pos).project(camera); if(v3.z > 1 || v3.x < -1.2 || v3.x > 1.2 || v3.y < -1.2 || v3.y > 1.2){ el.style.display = "none"; return; } el.style.display = ""; el.style.left = ((v3.x + 1)/2 * r.width) + "px"; el.style.top = ((1 - v3.y)/2 * r.height) + "px"; }
+const tmp = new THREE.Vector3();
+(function loop(t){
+  controls.update();
+  const r = stage.getBoundingClientRect();
+  markers.forEach(m => { m.head.position.y = 1.75 + Math.sin(t/520 + m.group.position.x) * 0.05;
+    if(!m.group.visible){ m.label.style.display = "none"; return; } tmp.copy(m.group.position); tmp.y += m.h; place(m.label, tmp, r); });
+  markObjs.forEach(m => { if(!m.done) m.fill.material.opacity = 0.16 + 0.12 * (0.5 + 0.5*Math.sin(t/380));
+    if(!m.group.visible){ m.label.style.display = "none"; return; } place(m.label, m.anchor, r); });
+  reticle.material.opacity = 0.65 + 0.3 * Math.sin(t/200);
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+})(0);
+
+/* ================= MODALI ================= */
+function modal(html, onMount){
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="modal" id="mdl" role="dialog" aria-modal="true">${html}</div>`;
+  const close = () => { root.innerHTML = ""; document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if(e.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey);
+  $("#mdl").addEventListener("pointerdown", e => { if(e.target.id === "mdl") close(); });
+  onMount(close, root);
+  const f = root.querySelector("[autofocus]"); if(f) f.focus();
+}
+function workerPicks(sel, editing, ignoreAid){
+  const busy = new Map(); dayAssign(cur).forEach(x => { if(x.id !== ignoreAid) busy.set(x.workerId, (busy.get(x.workerId) || 0) + (+x.hours || 0)); });
+  return workers().map(w => { const att = attOf(cur, w.id), off = att && att.s !== "p", b = busy.get(w.id) || 0;
+    return `<button class="pick" style="--c:${w.color}" data-w="${w.id}" aria-pressed="${sel.has(w.id)}"><span class="av" style="--c:${w.color}">${esc(initials(w.name))}</span>${esc(w.name)}<span class="busy">${off ? ATT[att.s] : b ? b + " h" : "slobodan"}</span></button>`; }).join("");
+}
+function bindPicks(root, sel, single){
+  root.querySelectorAll(".pick").forEach(b => b.onclick = () => {
+    const id = b.dataset.w;
+    if(single){ sel.clear(); sel.add(id); root.querySelectorAll(".pick").forEach(x => x.setAttribute("aria-pressed", x.dataset.w === id)); }
+    else { sel.has(id) ? sel.delete(id) : sel.add(id); b.setAttribute("aria-pressed", sel.has(id)); }
+    root.dispatchEvent(new Event("picks"));
+  });
+}
+function armDelete(btn, fn){ let armed = false; btn.onclick = () => { if(!armed){ armed = true; btn.textContent = "Potvrdi brisanje"; btn.classList.add("arm"); return; } fn(); }; }
+
+function openAssign(opt){
+  const editing = !!opt.edit;
+  const src = editing ? S.assignments.get(opt.edit) : null;
+  if(editing && !src) return;
+  const a = editing ? {id:opt.edit, ...src} : {date:cur, x:opt.point.x, y:opt.point.y, z:opt.point.z, zone:opt.zone, floor:opt.floor, task:opt.task || TRADES[0], hours:8, status:"plan", desc:opt.desc || "", note:"", block:""};
+  if(!workers().length){ toast("Prvo dodaj radnike u kartici Radnici."); setTab("radnici"); return; }
+  const sel = new Set(editing ? [a.workerId] : (opt.workers || []));
+  modal(`<div class="sheet">
+      <div class="zhead"><span class="k">${editing ? "Izmena zaduženja" : "Novo zaduženje"} · ${esc(DAYS[parseD(cur).getDay()])} ${fmtD(cur)}</span>
+        <h3>${esc(a.zone)}</h3>${isHeight(a) ? `<span class="tag warn" style="width:max-content">Rad na visini · obavezna zaštitna oprema</span>` : ""}</div>
+      <div class="fld"><span class="fl">${editing ? "Radnik" : "Radnici · izaberi jednog ili celu ekipu"}</span><div class="picks">${workerPicks(sel, editing, a.id)}</div></div>
+      <div class="grid2">
+        <div class="fld"><label for="mTask">Vrsta posla</label><select id="mTask">${TRADES.map(t => `<option ${t===a.task?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="fld"><label for="mHours">Planirani sati</label><input id="mHours" type="number" min="0.5" max="16" step="0.5" value="${esc(a.hours)}"></div>
+      </div>
+      <div class="fld"><label for="mDesc">Šta tačno radi</label><input id="mDesc" maxlength="120" placeholder="npr. zidanje pregradnih zidova u stanu 4" value="${esc(a.desc)}"></div>
+      <div class="grid2">
+        <div class="fld"><label for="mStatus">Status</label><select id="mStatus">${STATUS_ORDER.map(s => `<option value="${s}" ${s===a.status?"selected":""}>${STATUS[s]}</option>`).join("")}</select></div>
+        <div class="fld" id="mBlockWrap"><label for="mBlock">Razlog zastoja</label><select id="mBlock"><option value="">—</option>${BLOCKS.map(b => `<option ${b===a.block?"selected":""}>${b}</option>`).join("")}</select></div>
+      </div>
+      <div class="fld"><label for="mZone">Lokacija</label><input id="mZone" maxlength="80" value="${esc(a.zone)}"></div>
+      <div class="fld"><label for="mNote">Napomena za radnika / poslovođu</label><textarea id="mNote" maxlength="400" placeholder="materijal, alat, mere, ko proverava">${esc(a.note)}</textarea></div>
+      <div class="btns" style="justify-content:space-between"><div class="btns">${editing ? `<button class="btn danger" id="mDel">Obriši</button>` : ""}</div>
+        <div class="btns"><button class="btn" id="mCancel">Otkaži</button><button class="btn pri" id="mSave">${editing ? "Sačuvaj" : "Dodeli posao"}</button></div></div>
+    </div>`, (close, root) => {
+    bindPicks(root, sel, editing);
+    const syncBlock = () => $("#mBlockWrap").style.visibility = $("#mStatus").value === "blok" ? "visible" : "hidden";
+    $("#mStatus").onchange = syncBlock; if(opt.forceBlock){ $("#mStatus").value = "blok"; } syncBlock();
+    $("#mCancel").onclick = close;
+    if(editing) armDelete($("#mDel"), async () => { close(); await del("assignments", a.id); toast("Zaduženje obrisano"); });
+    $("#mSave").onclick = async () => {
+      if(!sel.size){ toast("Izaberi bar jednog radnika."); return; }
+      const base = {date:cur, task:$("#mTask").value, hours:Math.max(0, +$("#mHours").value || 0), desc:$("#mDesc").value.trim(), status:$("#mStatus").value,
+        block: $("#mStatus").value === "blok" ? $("#mBlock").value : "", zone:$("#mZone").value.trim() || a.zone, note:$("#mNote").value.trim(),
+        floor:a.floor ?? 0, x:a.x, y:a.y, z:a.z};
+      close();
+      if(editing){ await put("assignments", a.id, {...base, workerId:[...sel][0], createdAt:a.createdAt || Date.now()}); toast("Sačuvano"); }
+      else { const list = [...sel];
+        await Promise.all(list.map((wid, i) => put("assignments", uid("a"), {...base, workerId:wid, x:a.x + (i - (list.length-1)/2) * 0.9, createdAt:Date.now()})));
+        toast(list.length > 1 ? `Dodeljeno ekipi od ${list.length} radnika` : "Posao dodeljen"); }
+    };
+  });
+}
+
+function openMark(opt){
+  const editing = !!opt.edit, src = editing ? S.marks.get(opt.edit) : null;
+  if(editing && !src) return;
+  const m = editing ? {id:opt.edit, ...src} : {points:opt.points, shape:opt.shape, zone:opt.zone, floor:opt.floor, title:"", type:"paznja", note:"", always:true, done:false, date:cur, workers:[]};
+  let type = m.type;
+  const sel = new Set(m.workers || []);
+  const area = (() => { if(m.shape === "krug"){ const c = centroid(m.points); const r = Math.hypot(m.points[0][0]-c[0], m.points[0][1]-c[1], m.points[0][2]-c[2]); return `krug Ø ${(2*r).toFixed(1)} m`; } return "slobodno zaokruženo"; })();
+  modal(`<div class="sheet">
+      <div class="zhead"><span class="k">${editing ? "Izmena oznake" : "Nova oznaka"} · ${esc(area)}</span><h3>${esc(m.zone || "Označena zona")}</h3></div>
+      <div class="fld"><label for="kTitle">Naziv oznake</label><input id="kTitle" maxlength="70" placeholder="npr. Otvor u ploči, ograditi" value="${esc(m.title)}" autofocus></div>
+      <div class="fld"><span class="fl">Vrsta</span><div class="types">${Object.entries(MTYPES).map(([k,v]) => `<button class="type" style="--mc:${v.c}" data-t="${k}" aria-pressed="${k===type}"><i></i>${v.l}</button>`).join("")}</div></div>
+      <div class="fld"><label for="kNote">Opis</label><textarea id="kNote" maxlength="600" placeholder="šta treba uraditi ili na šta paziti">${esc(m.note)}</textarea></div>
+      <div class="fld"><span class="fl">Odgovorni radnici (opciono)</span><div class="picks">${workerPicks(sel, false)}</div></div>
+      ${editing ? "" : `<div class="grid2" id="kAssignWrap" hidden>
+        <div class="fld"><label for="kTask">Napravi im zaduženje</label><select id="kTask"><option value="">Ne, samo oznaka</option>${TRADES.map(t => `<option>${t}</option>`).join("")}</select></div>
+        <div class="fld"><label for="kHours">Sati</label><input id="kHours" type="number" min="0.5" max="16" step="0.5" value="8"></div></div>`}
+      <label class="check"><input type="checkbox" id="kAlways" ${m.always ? "checked" : ""}> Prikazuj svakog dana dok se ne reši</label>
+      ${editing ? `<label class="check"><input type="checkbox" id="kDone" ${m.done ? "checked" : ""}> Rešeno</label>` : ""}
+      <div class="btns" style="justify-content:space-between"><div class="btns">${editing ? `<button class="btn danger" id="kDel">Obriši</button><button class="btn" id="kFocus">${ICON.focus} Prikaži</button>` : ""}</div>
+        <div class="btns"><button class="btn" id="kCancel">Otkaži</button><button class="btn pri" id="kSave">${editing ? "Sačuvaj" : "Naglasi zonu"}</button></div></div>
+    </div>`, (close, root) => {
+    root.querySelectorAll(".type").forEach(b => b.onclick = () => { type = b.dataset.t; root.querySelectorAll(".type").forEach(x => x.setAttribute("aria-pressed", x.dataset.t === type)); });
+    bindPicks(root, sel, false);
+    const aw = $("#kAssignWrap"); if(aw) root.addEventListener("picks", () => aw.hidden = !sel.size);
+    $("#kCancel").onclick = close;
+    if(editing){ armDelete($("#kDel"), async () => { close(); await del("marks", m.id); toast("Oznaka obrisana"); }); $("#kFocus").onclick = () => { close(); focusMark(m.id); }; }
+    $("#kSave").onclick = async () => {
+      const data = {points:m.points, shape:m.shape || "lasso", zone:m.zone || "", floor:m.floor ?? 0, date:m.date || cur, createdAt:m.createdAt || Date.now(),
+        title:$("#kTitle").value.trim() || MTYPES[type].l, type, note:$("#kNote").value.trim(), always:$("#kAlways").checked,
+        done: editing ? $("#kDone").checked : false, workers:[...sel]};
+      const task = $("#kTask") ? $("#kTask").value : "", hrs = $("#kHours") ? Math.max(0, +$("#kHours").value || 8) : 8;
+      close();
+      await put("marks", editing ? m.id : uid("m"), data);
+      if(!editing && task && sel.size){
+        const c = centroid(m.points), list = [...sel];
+        await Promise.all(list.map((wid, i) => put("assignments", uid("a"), {date:cur, workerId:wid, task, hours:hrs, desc:data.title, status:"plan", block:"",
+          zone:data.title + (m.zone ? " · " + m.zone : ""), note:data.note, floor:data.floor, x:c[0] + (i - (list.length-1)/2) * 0.9, y:c[1], z:c[2], createdAt:Date.now()})));
+      }
+      toast(editing ? "Oznaka sačuvana" : task && sel.size ? `Zona naglašena i dodeljena (${sel.size})` : "Zona naglašena");
+    };
+  });
+}
+
+/* ================= PANEL ================= */
+function setTab(t){
+  tab = t; try { localStorage.setItem("baustela-tab", t); } catch(e){}
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === t));
+  renderPane();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$("#togglePanel").onclick = () => { const c = $("#app").classList.toggle("collapsed"); $("#togglePanel").setAttribute("aria-pressed", !c); resize(); };
+function renderPane(){ const pane = $("#pane"), y = pane.scrollTop; ({dan:paneDan, radnici:paneRadnici, prisustvo:panePrisustvo, dnevnik:paneDnevnik, analiza:paneAnaliza}[tab] || paneDan)(pane); pane.scrollTop = y; }
+const localBanner = () => mode === "local" ? `<div class="local">Radiš lokalno: podaci ostaju u ovom pregledaču. Otvori stranicu prijavljen na claude.ai da bi se čuvali u oblaku.</div>` : "";
+
+function paneDan(pane){
+  if(mode === "init"){ pane.innerHTML = `<div class="empty">Učitavam gradilište…</div>`; return; }
+  const ws = workers(), as = dayAssign(cur), alerts = computeAlerts(cur), mk = dayMarks(cur);
+  if(!ws.length){
+    pane.innerHTML = localBanner() + `<div class="empty"><h3>Gradilište još nema radnike</h3><p>Dodaj ekipu, pa klikni na 3D model da im podeliš posao. Svaki dobija ime RADNIK 1, 2, 3… koje možeš promeniti.</p>
+      <div class="btns" style="justify-content:center"><button class="btn pri" data-seed="6">Dodaj 6 radnika</button><button class="btn" data-seed="10">Dodaj 10</button></div></div>`;
+    pane.querySelectorAll("[data-seed]").forEach(b => b.onclick = () => addWorkers(+b.dataset.seed)); return;
+  }
+  const present = ws.filter(w => (attOf(cur, w.id) || {}).s === "p"), assigned = new Set(as.map(a => a.workerId));
+  const planned = as.reduce((s,a) => s + (+a.hours || 0), 0), attH = present.reduce((s,w) => s + (+attOf(cur, w.id).h || 0), 0);
+  const cost = present.reduce((s,w) => s + (+attOf(cur, w.id).h || 0) * (+w.rate || 0), 0), done = as.filter(a => a.status === "gotovo").length;
+  const groups = new Map(); as.forEach(a => { const k = a.zone || "—"; if(!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
+  const sorted = [...groups.entries()].sort((a,b) => (a[1][0].floor ?? 0) - (b[1][0].floor ?? 0) || a[0].localeCompare(b[0], "sr"));
+  const yest = dayAssign(addDays(cur, -1));
+  const pct = (a,b) => b ? Math.min(100, Math.round(a/b*100)) : 0;
+  pane.innerHTML = localBanner() + `
+    <div class="kpis">
+      <div class="kpi"><div class="v">${assigned.size}<small> / ${ws.length}</small></div><div class="l">radnika raspoređeno</div><div class="bar"><i style="width:${pct(assigned.size, ws.length)}%"></i></div></div>
+      <div class="kpi"><div class="v">${done}<small> / ${as.length}</small></div><div class="l">zadataka završeno</div><div class="bar"><i style="width:${pct(done, as.length)}%;background:var(--ok)"></i></div></div>
+      <div class="kpi"><div class="v">${planned}<small> h</small></div><div class="l">${present.length ? `plan · prisutno ${attH} h` : "plan · prisustvo nije uneto"}</div></div>
+      <div class="kpi"><div class="v">${cost ? (cost/1000).toFixed(1) + "<small>k RSD</small>" : "—"}</div><div class="l">trošak rada danas</div></div>
+    </div>
+    <h2>Upozorenja <span class="small" style="text-transform:none;letter-spacing:0;font-family:var(--f-body)">${alerts.length || "nema"}</span></h2>
+    <div class="alerts">${alerts.length ? alerts.slice(0, 8).map(a => `<div class="alert ${a.lvl}"><span class="d"></span><span>${esc(a.t)}</span></div>`).join("") + (alerts.length > 8 ? `<p class="small muted">i još ${alerts.length - 8}</p>` : "") : `<div class="alert okk"><span class="d"></span><span>Sve je raspoređeno i dokumenta su važeća.</span></div>`}</div>
+    <h2>Naglašene zone <button class="btn sm" id="newMark">${ICON.mark} Zaokruži</button></h2>
+    ${mk.length ? mk.map(m => { const t = MTYPES[m.type] || MTYPES.paznja; return `<div class="mk ${m.done ? "done" : ""}" style="--mc:${t.c}">
+        <span class="sw">${ICON.mark}</span>
+        <div style="min-width:0"><div class="who">${esc(m.title)}</div><div class="what">${esc(t.l)}${m.workers && m.workers.length ? " · " + m.workers.map(wName).map(esc).join(", ") : ""}${m.note ? " · " + esc(m.note) : ""}</div></div>
+        <div class="acts"><button class="ib" data-mfocus="${m.id}" aria-label="Prikaži na modelu" title="Prikaži na modelu">${ICON.focus}</button><button class="ib" data-medit="${m.id}" aria-label="Izmeni oznaku" title="Izmeni">${ICON.edit}</button></div>
+      </div>`; }).join("") : `<p class="small muted">Izaberi alat za zaokruživanje levo i povuci po modelu da naglasiš opasno mesto, zadatak ili deo za kontrolu.</p>`}
+    <h2>Zaduženja po lokaciji ${yest.length ? `<button class="btn sm" id="copyY">${ICON.copy} Plan od juče (${yest.length})</button>` : ""}</h2>
+    ${as.length ? sorted.map(([z, list]) => `<div class="zone"><div class="zh">${esc(z)}${list.some(isHeight) ? `<span class="hgt">· visina</span>` : ""}</div>
+      ${list.map(a => `<div class="row">${avatar(a.workerId)}
+          <div style="min-width:0"><div class="who">${esc(wName(a.workerId))} <span class="muted small" style="font-weight:500">· ${esc(a.hours)} h</span></div>
+            <div class="what">${esc(a.task)}${a.desc ? " · " + esc(a.desc) : ""}${a.status === "blok" && a.block ? " · " + esc(a.block) : ""}</div></div>
+          <div class="acts"><button class="st ${a.status}" data-cycle="${a.id}" title="Klikni za sledeći status">${STATUS[a.status] || "—"}</button>
+            <button class="ib" data-focus="${a.id}" aria-label="Prikaži na modelu" title="Prikaži na modelu">${ICON.focus}</button>
+            <button class="ib" data-edit="${a.id}" aria-label="Izmeni" title="Izmeni">${ICON.edit}</button></div>
+        </div>`).join("")}</div>`).join("") : `<div class="empty"><p>Za ${fmtD(cur)} nema zaduženja.</p><p class="small">Klikni na sprat, skelu, kran ili teren u modelu i izaberi radnike.</p></div>`}
+    ${(() => { const free = ws.filter(w => !assigned.has(w.id) && !["o","b","g"].includes((attOf(cur, w.id) || {}).s)); return free.length ? `<h2>Bez zaduženja</h2><div class="tags">${free.map(w => `<span class="chip"><span class="av" style="--c:${w.color}">${esc(initials(w.name))}</span>${esc(w.name)}</span>`).join("")}</div>` : ""; })()}`;
+  pane.querySelectorAll("[data-cycle]").forEach(b => b.onclick = () => {
+    const a = S.assignments.get(b.dataset.cycle); if(!a) return;
+    const next = STATUS_ORDER[(STATUS_ORDER.indexOf(a.status) + 1) % STATUS_ORDER.length];
+    if(next === "blok"){ openAssign({edit:b.dataset.cycle, forceBlock:true}); return; }
+    put("assignments", b.dataset.cycle, {...clone(a), status:next, block:""});
+  });
+  pane.querySelectorAll("[data-focus]").forEach(b => b.onclick = () => focusAssign(b.dataset.focus));
+  pane.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openAssign({edit:b.dataset.edit}));
+  pane.querySelectorAll("[data-mfocus]").forEach(b => b.onclick = () => focusMark(b.dataset.mfocus));
+  pane.querySelectorAll("[data-medit]").forEach(b => b.onclick = () => openMark({edit:b.dataset.medit}));
+  $("#newMark").onclick = () => { setTool("lasso"); toast("Drži i povuci po modelu da zaokružiš zonu"); };
+  const cy = $("#copyY");
+  if(cy) cy.onclick = async () => { cy.disabled = true;
+    await Promise.all(yest.map(a => { const {id, ...rest} = a; return put("assignments", uid("a"), {...rest, date:cur, status: a.status === "blok" ? "blok" : "plan", createdAt:Date.now()}); }));
+    toast(`Prekopirano ${yest.length} zaduženja sa ${fmtD(addDays(cur,-1))}`); };
+}
+
+async function addWorkers(n){
+  const ws = workers(); let max = ws.length;
+  ws.forEach(w => { const m = /^RADNIK\s+(\d+)$/i.exec(w.name || ""); if(m) max = Math.max(max, +m[1]); });
+  const jobs = []; for(let i=1; i<=n; i++){ const k = max + i; jobs.push(put("workers", uid("w"), {name:"RADNIK " + k, trade:"", color:COLORS[(k-1) % COLORS.length], rate:0, znr:"", lek:"", phone:"", order:k})); }
+  await Promise.all(jobs); toast(n === 1 ? "Dodat radnik" : `Dodato ${n} radnika`);
+}
+function paneRadnici(pane){
+  const ws = workers();
+  const tag = (s, l) => s === "none" ? `<span class="tag warn">${l}: nije uneto</span>` : s === "bad" ? `<span class="tag bad">${l}: isteklo</span>` : s === "warn" ? `<span class="tag warn">${l}: ističe uskoro</span>` : `<span class="tag ok">${l}: važi</span>`;
+  pane.innerHTML = localBanner() + `
+    <h2>Ekipa · ${ws.length} <span class="btns"><button class="btn sm pri" id="addW">+ Radnik</button><button class="btn sm" id="addW5">+ 5</button></span></h2>
+    <p class="small muted">Klikni na ime da ga promeniš, na krug da promeniš boju. Rokovi obuke i lekarskog pokreću upozorenja.</p>
+    ${ws.length ? "" : `<div class="empty">Još nema radnika.</div>`}
+    ${ws.map(w => { const hrs = [...S.assignments.values()].filter(a => a.workerId === w.id && diffDays(cur, a.date) >= 0 && diffDays(cur, a.date) < 7).reduce((s,a) => s + (+a.hours || 0), 0);
+      return `<div class="wk" data-w="${w.id}">
+        <div class="l1"><button class="av" style="--c:${w.color}" data-color aria-label="Promeni boju" title="Promeni boju">${esc(initials(w.name))}</button>
+          <input class="nm" id="nm-${w.id}" value="${esc(w.name)}" aria-label="Ime radnika" maxlength="40">
+          <button class="ib" data-del aria-label="Obriši radnika" title="Obriši radnika">${ICON.x}</button></div>
+        <div class="tags">${tag(certState(w.znr, cur), "Obuka ZNR")}${tag(certState(w.lek, cur), "Lekarski")}<span class="tag">${hrs} h u 7 dana</span></div>
+        <div class="grid2">
+          <div class="fld"><label for="tr-${w.id}">Zanat</label><select id="tr-${w.id}" data-f="trade"><option value="">—</option>${TRADES.map(t => `<option ${t===w.trade?"selected":""}>${t}</option>`).join("")}</select></div>
+          <div class="fld"><label for="rt-${w.id}">Satnica (RSD/h)</label><input id="rt-${w.id}" data-f="rate" type="number" min="0" step="10" value="${esc(w.rate || "")}"></div>
+          <div class="fld"><label for="zn-${w.id}">Obuka za bezbedan rad do</label><input id="zn-${w.id}" data-f="znr" type="date" value="${esc(w.znr)}"></div>
+          <div class="fld"><label for="lk-${w.id}">Lekarski (visina) do</label><input id="lk-${w.id}" data-f="lek" type="date" value="${esc(w.lek)}"></div>
+        </div>
+        <div class="fld"><label for="ph-${w.id}">Telefon</label><input id="ph-${w.id}" data-f="phone" type="tel" value="${esc(w.phone)}" placeholder="+381 …"></div>
+      </div>`; }).join("")}`;
+  $("#addW").onclick = () => addWorkers(1); $("#addW5").onclick = () => addWorkers(5);
+  pane.querySelectorAll(".wk").forEach(card => {
+    const id = card.dataset.w, save = patch => put("workers", id, {...clone(S.workers.get(id)), ...patch});
+    card.querySelector(".nm").addEventListener("change", e => { const v = e.target.value.trim(); if(v) save({name:v}); else e.target.value = S.workers.get(id).name; });
+    card.querySelectorAll("[data-f]").forEach(inp => inp.addEventListener("change", () => save({[inp.dataset.f]: inp.dataset.f === "rate" ? (+inp.value || 0) : inp.value})));
+    card.querySelector("[data-color]").onclick = () => { const w = S.workers.get(id); save({color: COLORS[(COLORS.indexOf(w.color) + 1) % COLORS.length]}); };
+    let armed = false;
+    card.querySelector("[data-del]").onclick = async ev => {
+      const fut = [...S.assignments.entries()].filter(([,a]) => a.workerId === id && a.date >= cur).map(([aid]) => aid);
+      if(!armed){ armed = true; ev.currentTarget.style.color = "var(--bad)"; ev.currentTarget.style.background = "var(--bad-soft)"; toast(fut.length ? `Klikni ponovo: briše se i ${fut.length} budućih zaduženja` : "Klikni ponovo da potvrdiš brisanje"); return; }
+      await Promise.all(fut.map(aid => del("assignments", aid))); await del("workers", id); toast("Radnik obrisan");
+    };
+  });
+}
+
+const saveDay = patch => { const d = clone(dayDoc(cur)); Object.assign(d, patch); d.date = cur; return put("days", cur, d); };
+function panePrisustvo(pane){
+  const ws = workers(), days = []; for(let i=6; i>=0; i--) days.push(addDays(cur, -i));
+  let totH = 0, totC = 0;
+  const rows = ws.map(w => { let h = 0;
+    const cells = days.map(d => { const a = attOf(d, w.id), v = a && a.s === "p" ? (+a.h || 0) : 0; h += v; return `<td>${a ? (a.s === "p" ? v : `<span class="muted">${a.s.toUpperCase()}</span>`) : `<span class="muted">·</span>`}</td>`; }).join("");
+    const c = h * (+w.rate || 0); totH += h; totC += c; return `<tr><td>${esc(w.name)}</td>${cells}<td>${h}</td><td>${c ? rsd(c) : "—"}</td></tr>`; }).join("");
+  pane.innerHTML = localBanner() + `
+    <h2>Prisustvo · ${fmtD(cur)} <button class="btn sm" id="allP">Svi prisutni 8 h</button></h2>
+    <p class="small muted">Unosi se jednom dnevno. Prisutni sati se porede sa planiranim, pa se vidi plaćeno vreme bez rasporeda.</p>
+    <div>${ws.map(w => { const a = attOf(cur, w.id) || {};
+      return `<div class="att"><div class="nm"><span class="av" style="--c:${w.color}">${esc(initials(w.name))}</span><span>${esc(w.name)}</span></div>
+        <div class="seg" role="group" aria-label="Status ${esc(w.name)}">${Object.keys(ATT).map(k => `<button data-w="${w.id}" data-s="${k}" aria-pressed="${a.s===k}" title="${ATT[k]}">${k.toUpperCase()}</button>`).join("")}</div>
+        <input type="number" id="h-${w.id}" data-h="${w.id}" min="0" max="16" step="0.5" value="${a.s === "p" ? esc(a.h) : ""}" ${a.s === "p" ? "" : "disabled"} aria-label="Sati ${esc(w.name)}" placeholder="h"></div>`; }).join("") || `<div class="empty">Dodaj radnike u kartici Radnici.</div>`}</div>
+    <p class="small muted">P prisutan · O odsutan · B bolovanje · G godišnji odmor</p>
+    <h2>Poslednjih 7 dana <button class="btn sm" id="csv">${ICON.copy} Obračun CSV</button></h2>
+    <div class="tbl-wrap"><table><thead><tr><th>Radnik</th>${days.map(d => `<th>${pad(parseD(d).getDate())}.${pad(parseD(d).getMonth()+1)}</th>`).join("")}<th>Sati</th><th>Iznos</th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><td>Ukupno</td>${days.map(() => "<td></td>").join("")}<td>${totH}</td><td>${totC ? rsd(totC) : "—"}</td></tr></tfoot></table></div>`;
+  pane.querySelectorAll("[data-s]").forEach(b => b.onclick = () => { const wid = b.dataset.w, s = b.dataset.s, d = clone(dayDoc(cur)); d.att = d.att || {}; const prev = d.att[wid] || {}; d.att[wid] = {s, h: s === "p" ? (prev.h || 8) : 0}; saveDay({att:d.att}); });
+  pane.querySelectorAll("[data-h]").forEach(inp => inp.addEventListener("change", () => { const d = clone(dayDoc(cur)); d.att = d.att || {}; d.att[inp.dataset.h] = {s:"p", h:Math.max(0, +inp.value || 0)}; saveDay({att:d.att}); }));
+  $("#allP").onclick = () => { const d = clone(dayDoc(cur)); d.att = d.att || {}; ws.forEach(w => { if(!d.att[w.id]) d.att[w.id] = {s:"p", h:8}; }); saveDay({att:d.att}); toast("Svi bez unosa označeni kao prisutni 8 h"); };
+  $("#csv").onclick = () => { const lines = [["Radnik", ...days.map(fmtD), "Sati", "Satnica", "Iznos RSD"].join(";")];
+    ws.forEach(w => { let h = 0; const c = days.map(d => { const a = attOf(d, w.id), v = a && a.s === "p" ? (+a.h || 0) : 0; h += v; return a ? (a.s === "p" ? v : a.s.toUpperCase()) : ""; }); lines.push([w.name, ...c, h, w.rate || 0, Math.round(h * (+w.rate || 0))].join(";")); });
+    copyText(lines.join("\n")); };
+}
+
+function reportText(){
+  const ws = workers(), as = dayAssign(cur), d = dayDoc(cur), proj = (S.meta.get("project") || {}).name || "Gradilište", mk = dayMarks(cur);
+  const present = ws.filter(w => (attOf(cur, w.id) || {}).s === "p"), absent = ws.filter(w => { const a = attOf(cur, w.id); return a && a.s !== "p"; });
+  const hrs = present.reduce((s,w) => s + (+attOf(cur, w.id).h || 0), 0), L = [];
+  L.push("DNEVNI IZVEŠTAJ SA GRADILIŠTA", proj, `${DAYS[parseD(cur).getDay()]}, ${fmtD(cur)}`, `Vreme: ${d.weather || "—"}${d.temp !== undefined && d.temp !== "" ? `, ${d.temp} °C` : ""}`, "");
+  L.push("RADNA SNAGA", `Prisutno: ${present.length} od ${ws.length} radnika, ukupno ${hrs} h`);
+  if(absent.length) L.push(`Odsutni: ${absent.map(w => `${w.name} (${ATT[attOf(cur, w.id).s].toLowerCase()})`).join(", ")}`);
+  L.push("", "IZVEDENI RADOVI PO LOKACIJI");
+  const groups = new Map(); as.forEach(a => { if(!groups.has(a.zone)) groups.set(a.zone, []); groups.get(a.zone).push(a); });
+  if(!as.length) L.push("— nema unetih zaduženja");
+  groups.forEach((list, z) => { L.push(`• ${z}`); list.forEach(a => L.push(`   - ${a.task}${a.desc ? ": " + a.desc : ""} · ${wName(a.workerId)} · ${a.hours} h · ${STATUS[a.status]}`)); });
+  const bl = as.filter(a => a.status === "blok");
+  L.push("", "ZASTOJI", bl.length ? bl.map(a => `• ${a.zone}: ${a.block || "razlog nije naveden"} (${wName(a.workerId)})`).join("\n") : "— nema");
+  if(mk.length){ L.push("", "NAGLAŠENE ZONE"); mk.forEach(m => L.push(`• [${(MTYPES[m.type] || MTYPES.paznja).l}] ${m.title}${m.done ? " (rešeno)" : ""}${m.note ? " — " + m.note : ""}`)); }
+  if(d.note) L.push("", "NAPOMENA", d.note);
+  L.push("", "Sastavio: ________________    Nadzor: ________________");
+  return L.join("\n");
+}
+function paneDnevnik(pane){
+  const d = dayDoc(cur);
+  pane.innerHTML = localBanner() + `
+    <h2>Dnevni izveštaj · ${fmtD(cur)} <button class="btn sm pri" id="copyR">${ICON.copy} Kopiraj</button></h2>
+    <p class="small muted">Sastavlja se sam iz zaduženja, prisustva i naglašenih zona. Dopuni vreme i napomenu.</p>
+    <div class="grid2">
+      <div class="fld"><label for="wth">Vremenski uslovi</label><select id="wth"><option value="">—</option>${WEATHER.map(w => `<option ${w===d.weather?"selected":""}>${w}</option>`).join("")}</select></div>
+      <div class="fld"><label for="tmp">Temperatura (°C)</label><input id="tmp" type="number" step="1" value="${esc(d.temp ?? "")}"></div>
+    </div>
+    <div class="fld"><label for="dnote">Napomena (posete, isporuke, nalozi nadzora)</label><textarea id="dnote" maxlength="1500">${esc(d.note || "")}</textarea></div>
+    <pre class="report">${esc(reportText())}</pre>`;
+  $("#wth").onchange = e => saveDay({weather:e.target.value}); $("#tmp").onchange = e => saveDay({temp:e.target.value}); $("#dnote").onchange = e => saveDay({note:e.target.value});
+  $("#copyR").onclick = () => copyText(reportText());
+}
+function paneAnaliza(pane){
+  pane.innerHTML = `<div class="research">
+    <h3>Šta vlasnicima gradilišta fali</h3>
+    <p class="small muted">Sažetak istraživanja (oktobar 2026) i šta je ugrađeno u alat.</p>
+    <div class="fact"><div class="num">~⅓</div><p>Produktivnog vremena u terenskoj studiji (oko 34%), slično američkim studijama iz 1977. i 2004. Ostatak odlazi na čekanje, kretanje i nejasne zadatke.</p></div>
+    <div class="fact"><div class="num">48%</div><p>Prepravki nastaje zbog loše komunikacije i netačnih podataka (PlanGrid i FMI). Tim gubi više od 14 sati nedeljno.</p></div>
+    <div class="fact"><div class="num">1/4</div><p>Radnika po satnici priznaje da je neko drugi otkucao dolazak umesto njih ili obrnuto.</p></div>
+    <div class="fact"><div class="num">90k</div><p>Zanatlija nedostaje Srbiji, prosečan građevinac ima 55 godina, a oko trećine zaposlenih u građevini su stranci, mnogi priučeni.</p></div>
+    <h2>Rupe na tržištu → rešenje</h2>
+    <div class="gap"><b>Alati prate gde je radnik (GPS), ne šta radi i gde tačno na objektu.</b><span class="fix">Zaduženje vezano za tačku na 3D modelu: sprat, sektor, skela, kran.</span></div>
+    <div class="gap"><b>Upozorenja se prenose usmeno i zaborave.</b><span class="fix">Zaokruživanje opasnih i kritičnih zona direktno na modelu, vidljivo svaki dan dok se ne reši.</span></div>
+    <div class="gap"><b>Veliki sistemi su skupi i spori za uvođenje; mali izvođači koriste Excel i Viber.</b><span class="fix">Klik na model, izbor radnika, gotovo. Plan od juče jednim klikom.</span></div>
+    <div class="gap"><b>Plaćeni sati bez rasporeda ostaju nevidljivi.</b><span class="fix">Prisustvo naspram plana i dnevni trošak rada.</span></div>
+    <div class="gap"><b>Zastoji se ne beleže, pa se ne znaju uzroci kašnjenja.</b><span class="fix">Status „Zastoj“ sa razlogom, crveno na modelu i u izveštaju.</span></div>
+    <div class="gap"><b>Evidencija sertifikata nema podsetnike pred istek.</b><span class="fix">Rok obuke ZNR i lekarskog, upozorenje 30 dana ranije i za rad na visini.</span></div>
+    <div class="gap"><b>Dnevni izveštaj se piše naknadno, iz glave.</b><span class="fix">Izveštaj se sastavlja sam iz podataka dana.</span></div>
+    <h2>Sledeći koraci</h2>
+    <ul class="small"><li>Uvoz pravog modela objekta (IFC iz Revita ili ArchiCAD-a).</li><li>Mobilni prikaz za radnika „moj posao danas“ na više jezika.</li><li>Fotografija pre i posle uz zaduženje i oznaku.</li><li>Normativi po m² ili m³ za merenje učinka ekipe.</li></ul>
+    <h2>Izvori</h2>
+    <ul class="small">
+      <li><a href="https://itcs.nu.edu.eg/publications/labour-productivity-building-construction-field-study" target="_blank" rel="noopener">Labour productivity in building construction: A field study</a></li>
+      <li><a href="https://www.constructiondive.com/news/industry-could-be-overspending-177b-per-year-study-finds/529450/" target="_blank" rel="noopener">Construction Dive: PlanGrid i FMI</a></li>
+      <li><a href="https://www.edhat.com/?p=291857" target="_blank" rel="noopener">OnTheClock anketa</a></li>
+      <li><a href="https://www.021.rs/info/srbija/223659/srbiji-nedostaje-90000-zanatlija-vecina-mladih-otisla-u-inostranstvo" target="_blank" rel="noopener">021.rs: Srbiji nedostaje 90.000 zanatlija</a></li>
+      <li><a href="https://n1info.rs/biznis/biznis-i-finansije-trziste-rada-u-srbiji-nece-moci-da-isprati-izgradnju-objekata-za-expo-2027/" target="_blank" rel="noopener">N1: Tržište rada i EXPO 2027</a></li>
+      <li><a href="https://peoplemanagingpeople.com/tools/best-construction-workforce-management-software/" target="_blank" rel="noopener">Pregled softvera za radnu snagu 2026</a></li>
+    </ul></div>`;
+}
+
+/* ================= ZAGLAVLJE ================= */
+function renderHeader(){
+  $("#dDate").value = cur;
+  const dd = diffDays(cur, TODAY);
+  $("#dName").textContent = dd === 0 ? "Danas" : dd === -1 ? "Juče" : dd === 1 ? "Sutra" : DAYS[parseD(cur).getDay()];
+  const p = S.meta.get("project"), inp = $("#projName"); if(document.activeElement !== inp) inp.value = (p && p.name) || "Moje gradilište";
+  const n = computeAlerts(cur).filter(a => a.lvl === "bad").length, b = $("#alertBadge"); b.hidden = !n; b.textContent = n;
+}
+const setDate = d => { if(!d) return; cur = d; renderAll(); };
+$("#dPrev").onclick = () => setDate(addDays(cur, -1)); $("#dNext").onclick = () => setDate(addDays(cur, 1));
+$("#dToday").onclick = () => setDate(TODAY); $("#dDate").onchange = e => setDate(e.target.value);
+$("#projName").addEventListener("change", e => put("meta", "project", {name: e.target.value.trim() || "Moje gradilište"}));
+
+function renderAll(){
+  renderHeader(); rebuildMarkers(); rebuildMarks(); renderLegend();
+  const a = document.activeElement;
+  if(a && $("#pane").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+  renderPane();
+}
+buildFloorGrp(); setTool("dodeli"); setTab(tab); renderAll(); initStore();
+})();
+</script>
+
+</body>
+</html>
